@@ -1,23 +1,42 @@
-'use client';
+import './globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import { ClientProviders } from '@/components/providers/ClientProviders';
 
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { DashboardNav } from '@/components/dashboard/DashboardNav';
+const inter = Inter({ subsets: ['latin'] });
 
-export default function DashboardLayout({
+export const metadata: Metadata = {
+  title: 'FinanceFlow - Smart Personal Finance Management',
+  description: 'Manage your finances with smart CSV imports, automatic categorization, and bill tracking',
+  openGraph: {
+    images: [
+      {
+        url: 'https://bolt.new/static/og_default.png',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: [
+      {
+        url: 'https://bolt.new/static/og_default.png',
+      },
+    ],
+  },
+};
+
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <ProtectedRoute>
-      <div className="flex h-screen overflow-hidden">
-        <aside className="w-64 flex-shrink-0">
-          <DashboardNav />
-        </aside>
-        <main className="flex-1 overflow-y-auto bg-slate-50">
+    <html lang="en">
+      <body className={inter.className}>
+        <ClientProviders>
           {children}
-        </main>
-      </div>
-    </ProtectedRoute>
+        </ClientProviders>
+      </body>
+    </html>
   );
 }

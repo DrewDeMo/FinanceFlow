@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { parseCSV, CSVRow, ColumnMapping, detectColumnMapping } from '@/lib/utils/csv-parser';
 import { CSVMappingForm } from '@/components/import/CSVMappingForm';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +30,7 @@ export default function ImportPage() {
   const [accountId, setAccountId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStats, setImportStats] = useState({
     imported: 0,
@@ -36,10 +38,7 @@ export default function ImportPage() {
     errors: 0,
   });
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
+  const processFile = async (selectedFile: File) => {
     if (!selectedFile.name.endsWith('.csv')) {
       setError('Please select a CSV file');
       return;
@@ -74,6 +73,40 @@ export default function ImportPage() {
     }
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+    await processFile(selectedFile);
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (!droppedFile) return;
+
+    await processFile(droppedFile);
+  };
+
   const handleStartImport = async () => {
     if (!user || !parsedData) return;
 
@@ -89,6 +122,7 @@ export default function ImportPage() {
     setLoading(true);
     setStep('processing');
     setError(null);
+    setImportProgress(0);
 
     try {
       const uploadRecord = await (supabase
@@ -108,6 +142,15 @@ export default function ImportPage() {
 
       console.log('Starting import API call...', { uploadId: uploadRecord.data.id, rowCount: parsedData.rows.length });
 
+      // Simulate progress updates during import
+      const totalRows = parsedData.rows.length;
+      const progressInterval = setInterval(() => {
+        setImportProgress((prev) => {
+          const next = prev + (100 / (totalRows / 10));
+          return next >= 90 ? 90 : next;
+        });
+      }, 100);
+
       const response = await fetch('/api/import/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,6 +161,9 @@ export default function ImportPage() {
           accountId: accountId || null,
         }),
       });
+
+      clearInterval(progressInterval);
+      setImportProgress(95);
 
       console.log('API response status:', response.status);
 
@@ -146,6 +192,8 @@ export default function ImportPage() {
           completed_at: new Date().toISOString(),
         })
         .eq('id', uploadRecord.data.id);
+
+      setImportProgress(100);
 
       if (result.imported > 0) {
         await fetch('/api/recurring/detect', {
@@ -179,6 +227,8 @@ export default function ImportPage() {
     setMapping({});
     setAccountId('');
     setError(null);
+    setDragActive(false);
+    setImportProgress(0);
     setImportStats({ imported: 0, duplicates: 0, errors: 0 });
   };
 
@@ -200,7 +250,16 @@ export default function ImportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center hover:border-slate-400 transition-colors">
+            <div
+              className={`border-2 border-dashed rounded-lg p-12 text-center transition-all ${dragActive
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-slate-300 hover:border-slate-400'
+                }`}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
               <input
                 type="file"
                 accept=".csv"
@@ -209,17 +268,20 @@ export default function ImportPage() {
                 id="csv-upload"
                 disabled={loading}
               />
-              <label htmlFor="csv-upload" className="cursor-pointer">
+              <label htmlFor="csv-upload" className="cursor-pointer block">
                 {loading ? (
                   <Loader2 className="h-12 w-12 mx-auto text-slate-400 animate-spin mb-4" />
                 ) : (
-                  <Upload className="h-12 w-12 mx-auto text-slate-400 mb-4" />
+                  <Upload className={`h-12 w-12 mx-auto mb-4 ${dragActive ? 'text-blue-500' : 'text-slate-400'
+                    }`} />
                 )}
-                <p className="text-lg font-medium text-slate-900 mb-2">
-                  {loading ? 'Parsing CSV...' : 'Click to upload CSV file'}
+                <p className={`text-lg font-medium mb-2 ${dragActive ? 'text-blue-700' : 'text-slate-900'
+                  }`}>
+                  {loading ? 'Parsing CSV...' : dragActive ? 'Drop file here' : 'Click to upload CSV file'}
                 </p>
-                <p className="text-sm text-slate-600">
-                  or drag and drop your file here
+                <p className={`text-sm ${dragActive ? 'text-blue-600' : 'text-slate-600'
+                  }`}>
+                  {dragActive ? 'Release to upload' : 'or drag and drop your file here'}
                 </p>
               </label>
             </div>
@@ -255,10 +317,22 @@ export default function ImportPage() {
               Importing and categorizing your transactions...
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">Import Progress</span>
+                <span className="font-medium text-slate-900">{Math.round(importProgress)}%</span>
+              </div>
+              <Progress value={importProgress} className="h-2" />
+            </div>
             <div className="flex items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-slate-600">Processing transactions...</span>
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
+              <span className="text-slate-600">
+                {importProgress < 30 ? 'Reading transactions...' :
+                  importProgress < 60 ? 'Processing data...' :
+                    importProgress < 90 ? 'Categorizing transactions...' :
+                      'Finalizing import...'}
+              </span>
             </div>
           </CardContent>
         </Card>

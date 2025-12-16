@@ -21,6 +21,8 @@ export interface RecurringPattern {
   last_occurrence_date: string;
   next_expected_date: string;
   is_variable: boolean;
+  is_subscription: boolean;
+  subscription_confidence: number;
 }
 
 interface MerchantGroup {
@@ -99,6 +101,14 @@ function analyzePattern(transactions: Transaction[]): RecurringPattern | null {
   const lastDate = new Date(lastTransaction.posted_date);
   const nextDate = calculateNextDate(lastDate, cadenceResult.cadence, cadenceResult.days);
 
+  // Enhanced subscription detection
+  const subscriptionAnalysis = analyzeSubscriptionLikelihood(
+    transactions,
+    cadenceResult.cadence,
+    amountVariance,
+    intervalVariance
+  );
+
   return {
     merchant_key: transactions[0].merchant_key,
     merchant_name: extractMerchantName(transactions[0].description),
@@ -112,6 +122,8 @@ function analyzePattern(transactions: Transaction[]): RecurringPattern | null {
     last_occurrence_date: lastTransaction.posted_date,
     next_expected_date: format(nextDate, 'yyyy-MM-dd'),
     is_variable: amountVariance > 10,
+    is_subscription: subscriptionAnalysis.isLikelySubscription,
+    subscription_confidence: subscriptionAnalysis.confidence,
   };
 }
 
@@ -183,4 +195,83 @@ function extractMerchantName(description: string): string {
 
   const words = cleaned.split(' ').filter(w => w.length > 0).slice(0, 5);
   return words.map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ') || 'Unknown Merchant';
+}
+
+/**
+ * Enhanced subscription detection using multiple heuristics
+ * Analyzes patterns to determine if a recurring charge is likely a subscription
+ */
+function analyzeSubscriptionLikelihood(
+  transactions: Transaction[],
+  cadence: RecurringPattern['cadence'],
+  amountVariance: number,
+  intervalVariance: number
+): { isLikelySubscription: boolean; confidence: number } {
+  let score = 0;
+  const maxScore = 100;
+
+  const merchantKey = transactions[0].merchant_key.toLowerCase();
+  const description = transactions[0].description.toLowerCase();
+
+  // 1. Known subscription keywords (30 points)
+  const subscriptionKeywords = [
+    'netflix', 'spotify', 'hulu', 'disney', 'amazon prime', 'youtube',
+    'apple music', 'icloud', 'dropbox', 'adobe', 'microsoft', 'office',
+    'gym', 'fitness', 'membership', 'subscription', 'monthly', 'annual',
+    'premium', 'pro', 'plus', 'unlimited', 'streaming', 'cloud',
+    'saas', 'software', 'app store', 'google play', 'patreon'
+  ];
+
+  const hasSubscriptionKeyword = subscriptionKeywords.some(keyword =>
+    merchantKey.includes(keyword) || description.includes(keyword)
+  );
+  if (hasSubscriptionKeyword) score += 30;
+
+  // 2. Consistent amount (20 points)
+  // Subscriptions typically have very consistent amounts
+  if (amountVariance <= 1) score += 20;
+  else if (amountVariance <= 3) score += 15;
+  else if (amountVariance <= 5) score += 10;
+
+  // 3. Regular intervals (20 points)
+  // Subscriptions have very regular payment intervals
+  if (intervalVariance <= 1) score += 20;
+  else if (intervalVariance <= 2) score += 15;
+  else if (intervalVariance <= 3) score += 10;
+
+  // 4. Monthly or annual cadence (15 points)
+  // Most subscriptions are monthly or annual
+  if (cadence === 'monthly') score += 15;
+  else if (cadence === 'annual') score += 12;
+  else if (cadence === 'quarterly') score += 8;
+  else if (cadence === 'weekly') score += 5;
+
+  // 5. Occurrence count (15 points)
+  // More occurrences = higher confidence
+  const occurrences = transactions.length;
+  if (occurrences >= 6) score += 15;
+  else if (occurrences >= 4) score += 12;
+  else if (occurrences >= 3) score += 8;
+  else if (occurrences >= 2) score += 5;
+
+  // 6. Amount pattern analysis (10 points)
+  // Check for common subscription price points
+  const amounts = transactions.map(t => Math.abs(t.amount));
+  const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+
+  const commonPricePoints = [
+    4.99, 5.99, 6.99, 7.99, 8.99, 9.99,
+    10.99, 11.99, 12.99, 13.99, 14.99, 15.99,
+    19.99, 24.99, 29.99, 39.99, 49.99, 99.99
+  ];
+
+  const isCommonPricePoint = commonPricePoints.some(price =>
+    Math.abs(avgAmount - price) < 0.5
+  );
+  if (isCommonPricePoint) score += 10;
+
+  const confidence = Math.round((score / maxScore) * 100);
+  const isLikelySubscription = score >= 50; // 50% threshold
+
+  return { isLikelySubscription, confidence };
 }

@@ -55,6 +55,8 @@ export async function POST(request: NextRequest) {
               last_occurrence_date: pattern.last_occurrence_date,
               next_expected_date: pattern.next_expected_date,
               is_variable: pattern.is_variable,
+              is_subscription: pattern.is_subscription,
+              subscription_confidence: pattern.subscription_confidence,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existing.id);
@@ -77,6 +79,8 @@ export async function POST(request: NextRequest) {
             last_occurrence_date: pattern.last_occurrence_date,
             next_expected_date: pattern.next_expected_date,
             is_variable: pattern.is_variable,
+            is_subscription: pattern.is_subscription,
+            subscription_confidence: pattern.subscription_confidence,
           });
         inserted++;
       }

@@ -35,20 +35,24 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   };
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Welcome Back</CardTitle>
-        <CardDescription>Sign in to your account to continue</CardDescription>
+    <Card className="w-full max-w-md glass border-purple-100/50 dark:border-purple-900/50 shadow-2xl backdrop-blur-xl animate-scale-in">
+      <CardHeader className="space-y-3">
+        <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
+          Welcome Back
+        </CardTitle>
+        <CardDescription className="text-base">
+          Sign in to your account to continue
+        </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="animate-slide-down">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email"
@@ -57,10 +61,11 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              className="input-modern h-11 transition-all duration-200 focus:ring-2 focus:ring-purple-500/20 dark:focus:ring-purple-400/20"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-sm font-medium">Password</Label>
             <Input
               id="password"
               type="password"
@@ -69,11 +74,16 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
+              className="input-modern h-11 transition-all duration-200 focus:ring-2 focus:ring-purple-500/20 dark:focus:ring-purple-400/20"
             />
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full" disabled={loading}>
+        <CardFooter className="flex flex-col space-y-4 pt-2">
+          <Button
+            type="submit"
+            className="w-full h-11 bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 hover:from-purple-700 hover:via-blue-700 hover:to-indigo-700 text-white font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
+            disabled={loading}
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -88,7 +98,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             <button
               type="button"
               onClick={onToggleMode}
-              className="text-primary hover:underline"
+              className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium hover:underline transition-colors duration-200"
             >
               Sign up
             </button>

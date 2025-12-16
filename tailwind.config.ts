@@ -9,10 +9,16 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-manrope)', 'sans-serif'],
+      },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic':
           'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+        'gradient-primary': 'linear-gradient(135deg, hsl(262 83% 58%), hsl(217 91% 60%), hsl(239 84% 67%))',
+        'gradient-secondary': 'linear-gradient(135deg, hsl(217 91% 60%), hsl(239 84% 67%))',
+        'gradient-accent': 'linear-gradient(135deg, hsl(280 65% 60%), hsl(262 83% 58%))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -50,6 +56,14 @@ const config: Config = {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -62,6 +76,7 @@ const config: Config = {
         },
       },
       keyframes: {
+        // Existing animations
         'accordion-down': {
           from: {
             height: '0',
@@ -78,10 +93,148 @@ const config: Config = {
             height: '0',
           },
         },
+        // New modern animations for micro-interactions
+        'fade-in': {
+          from: {
+            opacity: '0',
+          },
+          to: {
+            opacity: '1',
+          },
+        },
+        'fade-out': {
+          from: {
+            opacity: '1',
+          },
+          to: {
+            opacity: '0',
+          },
+        },
+        'slide-up': {
+          from: {
+            transform: 'translateY(10px)',
+            opacity: '0',
+          },
+          to: {
+            transform: 'translateY(0)',
+            opacity: '1',
+          },
+        },
+        'slide-down': {
+          from: {
+            transform: 'translateY(-10px)',
+            opacity: '0',
+          },
+          to: {
+            transform: 'translateY(0)',
+            opacity: '1',
+          },
+        },
+        'slide-left': {
+          from: {
+            transform: 'translateX(10px)',
+            opacity: '0',
+          },
+          to: {
+            transform: 'translateX(0)',
+            opacity: '1',
+          },
+        },
+        'slide-right': {
+          from: {
+            transform: 'translateX(-10px)',
+            opacity: '0',
+          },
+          to: {
+            transform: 'translateX(0)',
+            opacity: '1',
+          },
+        },
+        'scale-in': {
+          from: {
+            transform: 'scale(0.95)',
+            opacity: '0',
+          },
+          to: {
+            transform: 'scale(1)',
+            opacity: '1',
+          },
+        },
+        'scale-out': {
+          from: {
+            transform: 'scale(1)',
+            opacity: '1',
+          },
+          to: {
+            transform: 'scale(0.95)',
+            opacity: '0',
+          },
+        },
+        glow: {
+          '0%, 100%': {
+            boxShadow: '0 0 20px rgba(124, 58, 237, 0.3)',
+          },
+          '50%': {
+            boxShadow: '0 0 30px rgba(124, 58, 237, 0.5)',
+          },
+        },
+        'glow-blue': {
+          '0%, 100%': {
+            boxShadow: '0 0 20px rgba(37, 99, 235, 0.3)',
+          },
+          '50%': {
+            boxShadow: '0 0 30px rgba(37, 99, 235, 0.5)',
+          },
+        },
+        shimmer: {
+          '0%': {
+            backgroundPosition: '-1000px 0',
+          },
+          '100%': {
+            backgroundPosition: '1000px 0',
+          },
+        },
+        pulse: {
+          '0%, 100%': {
+            opacity: '1',
+          },
+          '50%': {
+            opacity: '0.8',
+          },
+        },
+        bounce: {
+          '0%, 100%': {
+            transform: 'translateY(0)',
+          },
+          '50%': {
+            transform: 'translateY(-5px)',
+          },
+        },
       },
       animation: {
+        // Existing animations
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        // New modern animations
+        'fade-in': 'fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        'fade-out': 'fade-out 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-up': 'slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-down': 'slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-left': 'slide-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-right': 'slide-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        'scale-in': 'scale-in 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        'scale-out': 'scale-out 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        'glow': 'glow 2s ease-in-out infinite',
+        'glow-blue': 'glow-blue 2s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
+        'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'bounce': 'bounce 1s ease-in-out infinite',
+      },
+      transitionTimingFunction: {
+        'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      transitionDuration: {
+        '250': '250ms',
       },
     },
   },

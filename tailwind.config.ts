@@ -10,20 +10,18 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-manrope)', 'sans-serif'],
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic':
-          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-        'gradient-primary': 'linear-gradient(135deg, hsl(262 83% 58%), hsl(217 91% 60%), hsl(239 84% 67%))',
-        'gradient-secondary': 'linear-gradient(135deg, hsl(217 91% 60%), hsl(239 84% 67%))',
-        'gradient-accent': 'linear-gradient(135deg, hsl(280 65% 60%), hsl(262 83% 58%))',
+        'gradient-subtle': 'linear-gradient(to bottom right, var(--tw-gradient-stops))',
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        xl: 'calc(var(--radius) + 4px)',
+        '2xl': 'calc(var(--radius) + 8px)',
       },
       colors: {
         background: 'hsl(var(--background))',

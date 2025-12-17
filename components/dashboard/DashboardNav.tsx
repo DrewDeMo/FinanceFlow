@@ -3,235 +3,205 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { useTheme } from '@/components/providers/ThemeProvider';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  Home,
-  CreditCard,
-  ArrowUpFromLine,
-  Repeat,
+  LayoutDashboard,
+  ArrowLeftRight,
+  Upload,
+  RefreshCw,
   Receipt,
   Target,
   Settings,
   LogOut,
-  Sparkles,
-  Filter,
-  Sun,
-  Moon,
+  Tags,
+  Zap,
   ChevronRight,
-  FolderKanban,
 } from 'lucide-react';
 
-const navItems = [
+const navSections = [
   {
-    name: 'Overview',
-    href: '/dashboard',
-    icon: Home,
-    gradient: 'from-violet-500 to-purple-500',
+    title: 'Overview',
+    items: [
+      {
+        name: 'Dashboard',
+        href: '/dashboard',
+        icon: LayoutDashboard,
+      },
+      {
+        name: 'Transactions',
+        href: '/dashboard/transactions',
+        icon: ArrowLeftRight,
+      },
+      {
+        name: 'Categories',
+        href: '/dashboard/categories',
+        icon: Tags,
+      },
+    ],
   },
   {
-    name: 'Transactions',
-    href: '/dashboard/transactions',
-    icon: CreditCard,
-    gradient: 'from-blue-500 to-cyan-500',
-  },
-  {
-    name: 'Categories',
-    href: '/dashboard/categories',
-    icon: FolderKanban,
-    gradient: 'from-pink-500 to-rose-500',
-  },
-  {
-    name: 'Import Data',
-    href: '/dashboard/import',
-    icon: ArrowUpFromLine,
-    gradient: 'from-emerald-500 to-teal-500',
-  },
-  {
-    name: 'Recurring',
-    href: '/dashboard/recurring',
-    icon: Repeat,
-    gradient: 'from-orange-500 to-amber-500',
-  },
-  {
-    name: 'Bills',
-    href: '/dashboard/bills',
-    icon: Receipt,
-    gradient: 'from-rose-500 to-pink-500',
-  },
-  {
-    name: 'Goals',
-    href: '/dashboard/goals',
-    icon: Target,
-    gradient: 'from-indigo-500 to-blue-500',
-  },
-  {
-    name: 'Rules',
-    href: '/dashboard/rules',
-    icon: Filter,
-    gradient: 'from-fuchsia-500 to-purple-500',
-  },
-  {
-    name: 'Settings',
-    href: '/dashboard/settings',
-    icon: Settings,
-    gradient: 'from-slate-500 to-gray-500',
+    title: 'Manage',
+    items: [
+      {
+        name: 'Import',
+        href: '/dashboard/import',
+        icon: Upload,
+      },
+      {
+        name: 'Recurring',
+        href: '/dashboard/recurring',
+        icon: RefreshCw,
+      },
+      {
+        name: 'Bills',
+        href: '/dashboard/bills',
+        icon: Receipt,
+      },
+      {
+        name: 'Goals',
+        href: '/dashboard/goals',
+        icon: Target,
+      },
+      {
+        name: 'Rules',
+        href: '/dashboard/rules',
+        icon: Zap,
+      },
+    ],
   },
 ];
 
 export function DashboardNav() {
   const pathname = usePathname();
   const { signOut, user } = useAuth();
-  const { theme, setTheme, resolvedTheme } = useTheme();
 
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return pathname === href;
+    }
+    return pathname.startsWith(href);
   };
 
   return (
-    <div className="relative flex flex-col h-full">
-      {/* Glassmorphism Background with Animated Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 dark:from-black dark:via-slate-950 dark:to-black" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent" />
-      <div className="absolute inset-0 backdrop-blur-3xl" />
-
-      {/* Border with gradient */}
-      <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-slate-700/50 to-transparent" />
-
-      <div className="relative flex flex-col h-full">
-        {/* Brand Section */}
-        <div className="p-6 pb-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl blur-lg opacity-75 group-hover:opacity-100 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-xl">
-                <Sparkles className="h-5 w-5 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white via-white to-slate-300 bg-clip-text text-transparent tracking-tight">
-                FinanceFlow
-              </h1>
-              <p className="text-xs text-slate-500 font-medium">Financial Management</p>
-            </div>
+    <div className="flex flex-col h-full bg-card border-r border-border/50">
+      {/* Logo */}
+      <div className="px-6 py-5 border-b border-border/50">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="w-5 h-5 text-primary-foreground"
+              strokeWidth="2"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"
+              />
+            </svg>
           </div>
-
-          {user && (
-            <div className="flex items-center gap-2 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.05] backdrop-blur-xl">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-400 mb-0.5">Logged in as</p>
-                <p className="text-sm text-white truncate font-medium">{user.email}</p>
-              </div>
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.05] text-slate-400 hover:text-white transition-all duration-300 hover:scale-110 active:scale-95 group"
-                aria-label="Toggle theme"
-              >
-                {resolvedTheme === 'dark' ? (
-                  <Sun className="h-4 w-4 transition-transform group-hover:rotate-12" />
-                ) : (
-                  <Moon className="h-4 w-4 transition-transform group-hover:-rotate-12" />
-                )}
-              </button>
-            </div>
-          )}
+          <div>
+            <h1 className="text-base font-semibold text-foreground tracking-tight">
+              FinanceFlow
+            </h1>
+            <p className="text-xs text-muted-foreground">Personal Finance</p>
+          </div>
         </div>
+      </div>
 
-        {/* Navigation Section */}
-        <div className="flex-1 px-3 overflow-y-auto">
-          <nav className="space-y-1">
-            {navItems.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin">
+        {navSections.map((section) => (
+          <div key={section.title} className="mb-6">
+            <h2 className="px-3 mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {section.title}
+            </h2>
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
 
-              return (
-                <Link key={item.href} href={item.href}>
-                  <div
-                    className={cn(
-                      'group relative flex items-center gap-3 px-3 py-3 rounded-2xl text-sm font-medium transition-all duration-300',
-                      isActive
-                        ? 'bg-white/[0.08] text-white shadow-lg'
-                        : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                    )}
-                    style={{
-                      animationDelay: `${index * 50}ms`,
-                    }}
-                  >
-                    {/* Active indicator */}
-                    {isActive && (
-                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r opacity-10 from-transparent via-white to-transparent" />
-                    )}
-
-                    {/* Icon with gradient background */}
-                    <div className={cn(
-                      'relative p-2 rounded-xl transition-all duration-300',
-                      isActive
-                        ? `bg-gradient-to-br ${item.gradient} shadow-lg`
-                        : 'bg-white/[0.03] group-hover:bg-white/[0.06]'
-                    )}>
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className={cn(
+                        'group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
+                        active
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      )}
+                    >
                       <Icon
                         className={cn(
-                          'h-4 w-4 transition-all duration-300',
-                          isActive
-                            ? 'text-white scale-110'
-                            : 'text-slate-400 group-hover:text-white group-hover:scale-110'
+                          'h-[18px] w-[18px] flex-shrink-0 transition-transform duration-150',
+                          !active && 'group-hover:scale-105'
                         )}
-                        strokeWidth={2.5}
+                        strokeWidth={active ? 2.5 : 2}
                       />
-                    </div>
-
-                    <span className={cn(
-                      'flex-1 transition-all duration-300',
-                      isActive ? 'font-semibold' : 'font-medium'
-                    )}>
-                      {item.name}
-                    </span>
-
-                    {/* Arrow indicator */}
-                    <ChevronRight
-                      className={cn(
-                        'h-4 w-4 transition-all duration-300',
-                        isActive
-                          ? 'opacity-100 translate-x-0'
-                          : 'opacity-0 -translate-x-2 group-hover:opacity-50 group-hover:translate-x-0'
+                      <span className="flex-1 truncate">{item.name}</span>
+                      {active && (
+                        <ChevronRight className="h-4 w-4 opacity-50" />
                       )}
-                    />
-
-                    {/* Glow effect on hover */}
-                    <div className={cn(
-                      'absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300',
-                      !isActive && 'group-hover:opacity-100',
-                      `bg-gradient-to-r ${item.gradient} blur-xl -z-10`
-                    )} style={{ opacity: isActive ? 0 : undefined }} />
-                  </div>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Sign Out Section */}
-        <div className="p-3 mt-auto">
-          <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.05] backdrop-blur-xl mb-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>System Status: Active</span>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
+        ))}
+      </nav>
 
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-slate-400 hover:text-white hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 rounded-2xl p-3 h-auto group"
-            onClick={signOut}
-          >
-            <div className="p-2 rounded-xl bg-white/[0.03] group-hover:bg-red-500/10 transition-all duration-300 mr-3">
-              <LogOut className="h-4 w-4 group-hover:text-red-400 transition-colors duration-300" strokeWidth={2.5} />
+      {/* Bottom Section */}
+      <div className="mt-auto border-t border-border/50">
+        {/* Settings */}
+        <div className="px-3 py-3">
+          <Link href="/dashboard/settings">
+            <div
+              className={cn(
+                'group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
+                isActive('/dashboard/settings')
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              )}
+            >
+              <Settings
+                className="h-[18px] w-[18px] flex-shrink-0"
+                strokeWidth={isActive('/dashboard/settings') ? 2.5 : 2}
+              />
+              <span className="flex-1">Settings</span>
             </div>
-            <span className="font-medium group-hover:text-red-400 transition-colors duration-300">Sign Out</span>
-            <ChevronRight className="h-4 w-4 ml-auto opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" />
-          </Button>
+          </Link>
         </div>
+
+        {/* User Section */}
+        {user && (
+          <div className="px-4 py-4 border-t border-border/50">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+                <span className="text-sm font-medium text-muted-foreground">
+                  {user.email?.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user.email?.split('@')[0]}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user.email}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={signOut}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors duration-150"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

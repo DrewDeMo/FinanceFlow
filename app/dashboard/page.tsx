@@ -3,12 +3,22 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { DollarSign, TrendingUp, TrendingDown, CreditCard, Calendar, Upload, AlertCircle, Sparkles, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, subMonths, differenceInDays, formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
+import {
+  TrendingUp,
+  TrendingDown,
+  CreditCard,
+  Calendar,
+  Upload,
+  ArrowRight,
+  Wallet,
+  RefreshCw,
+  Bell,
+} from 'lucide-react';
+import { format, startOfMonth, endOfMonth, differenceInDays, formatDistanceToNow } from 'date-fns';
+import Link from 'next/link';
 
 interface DashboardStats {
   totalTransactions: number;
@@ -110,274 +120,283 @@ export default function DashboardPage() {
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   if (loading) {
     return (
-      <div className="p-8 space-y-8 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-            <p className="text-slate-400">Loading your financial overview...</p>
-          </div>
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-5 w-72" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="relative overflow-hidden rounded-3xl bg-white/[0.03] border border-white/[0.05] backdrop-blur-xl p-6">
-              <Skeleton className="h-32 bg-white/[0.05] rounded-2xl animate-pulse" />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32 rounded-2xl" />
           ))}
         </div>
       </div>
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
-
-  return (
-    <div className="p-8 space-y-8 animate-fade-in">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl blur-xl opacity-50" />
-              <div className="relative p-2 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl">
-                <Sparkles className="h-5 w-5 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold text-white">Financial Overview</h1>
-          </div>
-          <p className="text-slate-400">Track your income, expenses, and financial goals</p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-slate-500 mb-1">Current Period</p>
-          <p className="text-lg font-semibold text-white">
-            {format(new Date(), 'MMMM yyyy')}
+  // Empty state
+  if (stats?.totalTransactions === 0) {
+    return (
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+            Welcome to FinanceFlow
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Let's get started with your financial journey
           </p>
         </div>
-      </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Monthly Income Card */}
-        <Card className="group relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.05] hover:scale-[1.02]">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-slate-400">Monthly Income</CardTitle>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <ArrowUpRight className="h-4 w-4 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-white mb-2">
-              {formatCurrency(stats?.monthlyIncome || 0)}
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1 flex-1 rounded-full bg-white/[0.05]">
-                <div className="h-full w-3/4 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" />
-              </div>
-              <p className="text-xs text-slate-500">
-                Total income
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Monthly Expenses Card */}
-        <Card className="group relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.05] hover:scale-[1.02]">
-          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-rose-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-slate-400">Monthly Expenses</CardTitle>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-pink-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-rose-500 to-pink-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <ArrowDownRight className="h-4 w-4 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-white mb-2">
-              {formatCurrency(stats?.monthlyExpenses || 0)}
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1 flex-1 rounded-full bg-white/[0.05]">
-                <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-rose-500 to-pink-500" />
-              </div>
-              <p className="text-xs text-slate-500">
-                Total expenses
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Net Cashflow Card */}
-        <Card className="group relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.05] hover:scale-[1.02]">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-slate-400">Net Cashflow</CardTitle>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <DollarSign className="h-4 w-4 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-3xl font-bold mb-2 ${(stats?.netCashflow || 0) >= 0 ? 'text-white' : 'text-orange-400'}`}>
-              {formatCurrency(stats?.netCashflow || 0)}
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1 flex-1 rounded-full bg-white/[0.05]">
-                <div className={`h-full rounded-full ${(stats?.netCashflow || 0) >= 0 ? 'w-4/5 bg-gradient-to-r from-blue-500 to-cyan-500' : 'w-1/3 bg-gradient-to-r from-orange-500 to-amber-500'}`} />
-              </div>
-              <p className="text-xs text-slate-500">
-                Net flow
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Total Transactions Card */}
-        <Card className="group relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.05] hover:scale-[1.02]">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-violet-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-slate-400">Total Transactions</CardTitle>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <CreditCard className="h-4 w-4 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-white mb-2">
-              {stats?.totalTransactions || 0}
-            </div>
-            <p className="text-xs text-slate-500">
-              All time transactions
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Active Recurring Card */}
-        <Card className="group relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.05] hover:scale-[1.02]">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-orange-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-slate-400">Active Recurring</CardTitle>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <TrendingUp className="h-4 w-4 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-white mb-2">
-              {stats?.recurringCharges || 0}
-            </div>
-            <p className="text-xs text-slate-500">
-              Active subscriptions
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Upcoming Bills Card */}
-        <Card className="group relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.05] hover:scale-[1.02]">
-          <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/10 via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-fuchsia-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-slate-400">Upcoming Bills</CardTitle>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500 to-pink-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2.5 bg-gradient-to-br from-fuchsia-500 to-pink-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <Calendar className="h-4 w-4 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-white mb-2">
-              {stats?.upcomingBills || 0}
-            </div>
-            <p className="text-xs text-slate-500">
-              Due soon or upcoming
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Upload Reminder Alert */}
-      {showUploadReminder && stats && stats.totalTransactions > 0 && (
-        <Alert className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl animate-slide-down">
-          <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10" />
-          <div className="absolute inset-0 border border-white/[0.05] rounded-2xl" />
-          <div className="relative flex items-start gap-4">
-            <div className="p-2.5 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl shadow-lg">
-              <AlertCircle className="h-5 w-5 text-white" strokeWidth={2.5} />
-            </div>
-            <AlertDescription className="flex-1 flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <span className="font-semibold text-white text-base block mb-1">
-                  Time to update your finances!
-                </span>
-                <p className="text-slate-400 text-sm">
-                  Your last CSV import was {lastUploadDate && formatDistanceToNow(lastUploadDate, { addSuffix: true })}.
-                  Keep your data current by importing recent transactions.
-                </p>
-              </div>
-              <Button
-                asChild
-                className="ml-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl"
-              >
-                <a href="/dashboard/import" className="flex items-center gap-2">
-                  <Upload className="h-4 w-4" strokeWidth={2.5} />
-                  Import CSV
-                </a>
-              </Button>
-            </AlertDescription>
+        <div className="flex flex-col items-center justify-center py-20 px-6">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+            <Wallet className="h-8 w-8 text-primary" />
           </div>
-        </Alert>
+          <h2 className="text-xl font-semibold text-foreground mb-2 text-center">
+            No transactions yet
+          </h2>
+          <p className="text-muted-foreground text-center max-w-md mb-8">
+            Import your first CSV file from your bank to start tracking your finances and see insights here.
+          </p>
+          <Button asChild size="lg" className="gap-2">
+            <Link href="/dashboard/import">
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+            Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Your financial overview for {format(new Date(), 'MMMM yyyy')}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild className="gap-2">
+            <Link href="/dashboard/import">
+              <Upload className="h-4 w-4" />
+              Import
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* Upload Reminder */}
+      {showUploadReminder && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center flex-shrink-0">
+            <Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Time to update your finances
+            </p>
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              Last import was {lastUploadDate && formatDistanceToNow(lastUploadDate, { addSuffix: true })}
+            </p>
+          </div>
+          <Button size="sm" variant="ghost" asChild className="text-amber-700 hover:text-amber-900 hover:bg-amber-100">
+            <Link href="/dashboard/import">
+              Import Now
+            </Link>
+          </Button>
+        </div>
       )}
 
-      {/* Empty State Card */}
-      {stats?.totalTransactions === 0 && (
-        <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl animate-scale-in">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 via-blue-500/5 to-fuchsia-500/10" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-500/10 via-transparent to-transparent" />
-          <CardContent className="relative pt-12 pb-12 text-center">
-            <div className="relative inline-block mb-6">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-3xl blur-2xl opacity-50" />
-              <div className="relative mx-auto w-20 h-20 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-3xl flex items-center justify-center shadow-2xl">
-                <Upload className="h-10 w-10 text-white" strokeWidth={2.5} />
-              </div>
+      {/* Bento Grid Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Monthly Income */}
+        <div className="stat-card group">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-3">
-              Get Started with FinanceFlow
-            </h3>
-            <p className="text-slate-400 mb-8 text-base max-w-md mx-auto">
-              You haven't imported any transactions yet. Upload a CSV file from your bank to begin tracking your finances.
-            </p>
-            <a
-              href="/dashboard/import"
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 hover:from-violet-500 hover:via-fuchsia-500 hover:to-pink-500 text-white px-8 py-4 rounded-2xl font-semibold shadow-2xl hover:shadow-violet-500/25 hover:scale-105 transition-all duration-300"
-            >
-              <Upload className="h-5 w-5" strokeWidth={2.5} />
-              Import Your First CSV
-            </a>
-          </CardContent>
-        </Card>
-      )}
+            <span className="badge-success">
+              <TrendingUp className="h-3 w-3" />
+              Income
+            </span>
+          </div>
+          <p className="metric-value text-emerald-600 dark:text-emerald-400">
+            {formatCurrency(stats?.monthlyIncome || 0)}
+          </p>
+          <p className="metric-label mt-1">Monthly Income</p>
+        </div>
+
+        {/* Monthly Expenses */}
+        <div className="stat-card group">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center">
+              <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
+            </div>
+            <span className="badge-danger">
+              <TrendingDown className="h-3 w-3" />
+              Spent
+            </span>
+          </div>
+          <p className="metric-value text-red-600 dark:text-red-400">
+            {formatCurrency(stats?.monthlyExpenses || 0)}
+          </p>
+          <p className="metric-label mt-1">Monthly Expenses</p>
+        </div>
+
+        {/* Net Cashflow */}
+        <div className={cn(
+          "stat-card group",
+          (stats?.netCashflow || 0) >= 0
+            ? "bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border-emerald-200 dark:border-emerald-900/50"
+            : "bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-red-200 dark:border-red-900/50"
+        )}>
+          <div className="flex items-start justify-between mb-4">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center",
+              (stats?.netCashflow || 0) >= 0
+                ? "bg-emerald-100 dark:bg-emerald-900/50"
+                : "bg-red-100 dark:bg-red-900/50"
+            )}>
+              <Wallet className={cn(
+                "h-5 w-5",
+                (stats?.netCashflow || 0) >= 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-red-600 dark:text-red-400"
+              )} />
+            </div>
+          </div>
+          <p className={cn(
+            "metric-value",
+            (stats?.netCashflow || 0) >= 0
+              ? "text-emerald-700 dark:text-emerald-300"
+              : "text-red-700 dark:text-red-300"
+          )}>
+            {formatCurrency(stats?.netCashflow || 0)}
+          </p>
+          <p className="metric-label mt-1">Net Cashflow</p>
+        </div>
+
+        {/* Total Transactions */}
+        <div className="stat-card group">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center">
+              <CreditCard className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            </div>
+          </div>
+          <p className="metric-value">
+            {stats?.totalTransactions || 0}
+          </p>
+          <p className="metric-label mt-1">Total Transactions</p>
+        </div>
+      </div>
+
+      {/* Secondary Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Recurring */}
+        <Link href="/dashboard/recurring" className="block">
+          <div className="stat-card group hover:border-primary/50 cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center">
+                  <RefreshCw className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {stats?.recurringCharges || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Active Subscriptions</p>
+                </div>
+              </div>
+              <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+            </div>
+          </div>
+        </Link>
+
+        {/* Bills */}
+        <Link href="/dashboard/bills" className="block">
+          <div className="stat-card group hover:border-primary/50 cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center">
+                  <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {stats?.upcomingBills || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Upcoming Bills</p>
+                </div>
+              </div>
+              <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mt-8">
+        <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Link href="/dashboard/transactions">
+            <div className="p-4 rounded-xl bg-card border border-border/50 hover:border-border hover:shadow-card transition-all text-center group cursor-pointer">
+              <CreditCard className="h-5 w-5 mx-auto mb-2 text-muted-foreground group-hover:text-primary transition-colors" />
+              <p className="text-sm font-medium text-foreground">Transactions</p>
+            </div>
+          </Link>
+          <Link href="/dashboard/categories">
+            <div className="p-4 rounded-xl bg-card border border-border/50 hover:border-border hover:shadow-card transition-all text-center group cursor-pointer">
+              <div className="h-5 w-5 mx-auto mb-2 text-muted-foreground group-hover:text-primary transition-colors flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z" />
+                  <path d="M6 9.01V9" />
+                  <path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-foreground">Categories</p>
+            </div>
+          </Link>
+          <Link href="/dashboard/goals">
+            <div className="p-4 rounded-xl bg-card border border-border/50 hover:border-border hover:shadow-card transition-all text-center group cursor-pointer">
+              <div className="h-5 w-5 mx-auto mb-2 text-muted-foreground group-hover:text-primary transition-colors flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-foreground">Goals</p>
+            </div>
+          </Link>
+          <Link href="/dashboard/rules">
+            <div className="p-4 rounded-xl bg-card border border-border/50 hover:border-border hover:shadow-card transition-all text-center group cursor-pointer">
+              <div className="h-5 w-5 mx-auto mb-2 text-muted-foreground group-hover:text-primary transition-colors flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-foreground">Rules</p>
+            </div>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

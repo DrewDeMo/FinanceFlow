@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,10 +15,35 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, Download, Filter, Edit2, Receipt, Sparkles, Users, Check, ChevronsUpDown } from 'lucide-react';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import * as LucideIcons from 'lucide-react';
+import {
+  Search,
+  Download,
+  Filter,
+  Edit2,
+  Receipt,
+  Sparkles,
+  Users,
+  Check,
+  ChevronsUpDown,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
+  Building2,
+  Tag,
+  X,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Circle,
+} from 'lucide-react';
+import { format, parseISO, isToday, isYesterday, isThisWeek, isThisMonth } from 'date-fns';
+import { toast } from 'sonner';
 
 interface Transaction {
   id: string;
@@ -49,6 +73,8 @@ interface Account {
   type: string;
 }
 
+const ITEMS_PER_PAGE = 25;
+
 export default function TransactionsPage() {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -58,6 +84,7 @@ export default function TransactionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
+  const [selectedType, setSelectedType] = useState<string>('all');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -67,6 +94,7 @@ export default function TransactionsPage() {
   });
   const [similarTransactionsCount, setSimilarTransactionsCount] = useState(0);
   const [categorySearchOpen, setCategorySearchOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     if (user) {
@@ -96,7 +124,7 @@ export default function TransactionsPage() {
           `)
           .eq('user_id', user.id)
           .order('posted_date', { ascending: false })
-          .limit(100),
+          .limit(500),
         supabase
           .from('categories')
           .select('*')
@@ -141,7 +169,6 @@ export default function TransactionsPage() {
       applyToAll: false
     });
 
-    // Count similar transactions with the same merchant_key
     if (user) {
       const { count } = await supabase
         .from('transactions')
@@ -161,7 +188,6 @@ export default function TransactionsPage() {
 
     try {
       if (editForm.applyToAll && similarTransactionsCount > 0) {
-        // Bulk update all transactions with the same merchant_key
         const { error } = await supabase
           .from('transactions')
           .update({
@@ -176,7 +202,6 @@ export default function TransactionsPage() {
 
         toast.success(`Updated ${similarTransactionsCount + 1} transactions successfully`);
       } else {
-        // Single transaction update
         const { error } = await supabase
           .from('transactions')
           .update({
@@ -205,396 +230,633 @@ export default function TransactionsPage() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
+    }).format(Math.abs(amount));
+  };
+
+  const formatCompactCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
-  const filteredTransactions = transactions.filter((t) => {
-    const matchesSearch =
-      t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.merchant_key.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      const matchesSearch =
+        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.merchant_key.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCategory =
-      selectedCategory === 'all' || t.category_id === selectedCategory;
+      const matchesCategory =
+        selectedCategory === 'all' || t.category_id === selectedCategory;
 
-    const matchesAccount =
-      selectedAccount === 'all' || t.account_id === selectedAccount;
+      const matchesAccount =
+        selectedAccount === 'all' || t.account_id === selectedAccount;
 
-    return matchesSearch && matchesCategory && matchesAccount;
-  });
+      const matchesType =
+        selectedType === 'all' ||
+        (selectedType === 'income' && t.amount > 0) ||
+        (selectedType === 'expense' && t.amount < 0);
+
+      return matchesSearch && matchesCategory && matchesAccount && matchesType;
+    });
+  }, [transactions, searchTerm, selectedCategory, selectedAccount, selectedType]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTransactions.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredTransactions, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, selectedAccount, selectedType]);
+
+  // Summary stats for filtered transactions
+  const stats = useMemo(() => {
+    const income = filteredTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+    const expenses = filteredTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const uncategorized = filteredTransactions.filter(t => !t.category_id).length;
+
+    return { income, expenses, count: filteredTransactions.length, uncategorized };
+  }, [filteredTransactions]);
+
+  const getDateLabel = (dateStr: string) => {
+    const date = parseISO(dateStr);
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'MMM d, yyyy');
+  };
+
+  const hasActiveFilters = searchTerm || selectedCategory !== 'all' || selectedAccount !== 'all' || selectedType !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setSelectedAccount('all');
+    setSelectedType('all');
+  };
 
   if (loading) {
     return (
-      <div className="p-8 space-y-8 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Transactions</h1>
-            <p className="text-slate-400">Loading your transactions...</p>
-          </div>
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-5 w-72" />
         </div>
-        <div className="space-y-6">
-          <Skeleton className="h-32 bg-white/[0.05] rounded-2xl animate-pulse" />
-          <Skeleton className="h-96 bg-white/[0.05] rounded-2xl animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-16 rounded-2xl mb-6" />
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 space-y-8 animate-fade-in">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl blur-xl opacity-50" />
-              <div className="relative p-2 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl">
-                <Receipt className="h-5 w-5 text-white" strokeWidth={2.5} />
+    <TooltipProvider>
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+              Transactions
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {transactions.length > 0
+                ? `${transactions.length} total transactions`
+                : 'No transactions yet'}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </div>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="stat-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
+                  {formatCompactCurrency(stats.income)}
+                </p>
+                <p className="text-sm text-muted-foreground">Income</p>
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-white">Transactions</h1>
           </div>
-          <p className="text-slate-400">View and manage your financial transactions</p>
-        </div>
-        <Button
-          className="bg-white/[0.05] hover:bg-white/[0.1] text-white border border-white/[0.1] backdrop-blur-xl transition-all duration-300 hover:scale-105 rounded-xl"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </Button>
-      </div>
 
-      {/* Filter Card */}
-      <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent" />
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filter Transactions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative md:col-span-2">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search transactions..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-white/[0.05] border-white/[0.1] text-white placeholder:text-slate-500 focus:bg-white/[0.1] transition-colors"
-              />
+          <div className="stat-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center">
+                <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                  {formatCompactCurrency(stats.expenses)}
+                </p>
+                <p className="text-sm text-muted-foreground">Expenses</p>
+              </div>
             </div>
-
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="bg-white/[0.05] border-white/[0.1] text-white">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-white/[0.1]">
-                <SelectItem value="all" className="text-white hover:bg-white/[0.1]">All Categories</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id} className="text-white hover:bg-white/[0.1]">
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger className="bg-white/[0.05] border-white/[0.1] text-white">
-                <SelectValue placeholder="All accounts" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-white/[0.1]">
-                <SelectItem value="all" className="text-white hover:bg-white/[0.1]">All Accounts</SelectItem>
-                {accounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id} className="text-white hover:bg-white/[0.1]">
-                    {acc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Transactions Table Card */}
-      <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent" />
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/[0.05] hover:bg-transparent">
-                  <TableHead className="text-slate-400">Date</TableHead>
-                  <TableHead className="text-slate-400">Description</TableHead>
-                  <TableHead className="text-slate-400">Category</TableHead>
-                  <TableHead className="text-right text-slate-400">Amount</TableHead>
-                  <TableHead className="text-slate-400">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.length === 0 ? (
-                  <TableRow className="border-white/[0.05] hover:bg-white/[0.02]">
-                    <TableCell colSpan={5} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="p-3 bg-white/[0.05] rounded-2xl">
-                          <Receipt className="h-8 w-8 text-slate-500" />
+          <div className="stat-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center">
+                <CreditCard className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-foreground">
+                  {stats.count}
+                </p>
+                <p className="text-sm text-muted-foreground">Transactions</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center">
+                <Tag className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-foreground">
+                  {stats.uncategorized}
+                </p>
+                <p className="text-sm text-muted-foreground">Uncategorized</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search transactions..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 h-10"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter dropdowns */}
+              <div className="flex flex-wrap gap-2">
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger className="w-[130px] h-10">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="income">
+                      <span className="flex items-center gap-2">
+                        <ArrowUpRight className="h-3 w-3 text-emerald-500" />
+                        Income
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="expense">
+                      <span className="flex items-center gap-2">
+                        <ArrowDownRight className="h-3 w-3 text-red-500" />
+                        Expense
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-[160px] h-10">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((cat) => {
+                      const IconComponent = (LucideIcons as any)[cat.icon] || Circle;
+                      return (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <span className="flex items-center gap-2">
+                            <IconComponent
+                              className="h-3.5 w-3.5"
+                              style={{ color: cat.color }}
+                            />
+                            {cat.name}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                  <SelectTrigger className="w-[160px] h-10">
+                    <SelectValue placeholder="Account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Accounts</SelectItem>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-10 px-3 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transactions List */}
+        <Card>
+          <CardContent className="p-0">
+            {filteredTransactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6">
+                <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <Receipt className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium text-foreground mb-1">
+                  {hasActiveFilters ? 'No matching transactions' : 'No transactions yet'}
+                </h3>
+                <p className="text-sm text-muted-foreground text-center max-w-sm">
+                  {hasActiveFilters
+                    ? 'Try adjusting your filters to see more results.'
+                    : 'Import your bank statements to start tracking your finances.'}
+                </p>
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {paginatedTransactions.map((transaction, index) => {
+                  const isIncome = transaction.amount > 0;
+                  const showDateHeader = index === 0 ||
+                    paginatedTransactions[index - 1].posted_date !== transaction.posted_date;
+
+                  return (
+                    <div key={transaction.id}>
+                      {showDateHeader && (
+                        <div className="px-4 py-2 bg-muted/50 border-b border-border">
+                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {getDateLabel(transaction.posted_date)}
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-slate-400 font-medium">No transactions found</p>
-                          <p className="text-slate-600 text-sm mt-1">Try adjusting your filters or import new data</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredTransactions.map((transaction) => (
-                    <TableRow key={transaction.id} className="border-white/[0.05] hover:bg-white/[0.02] transition-colors">
-                      <TableCell className="font-medium text-white">
-                        {format(new Date(transaction.posted_date), 'MMM dd, yyyy')}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium text-white">{transaction.description}</div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm text-slate-400">{transaction.merchant_key}</span>
+                      )}
+                      <div
+                        className="group flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => handleEditTransaction(transaction)}
+                      >
+                        {/* Category icon indicator */}
+                        {(() => {
+                          const CategoryIcon = transaction.category
+                            ? (LucideIcons as any)[transaction.category.icon] || Circle
+                            : Circle;
+                          const iconColor = transaction.category?.color || '#9CA3AF';
+                          const bgColor = transaction.category?.color
+                            ? `${transaction.category.color}15`
+                            : (isIncome ? 'rgb(236, 253, 245)' : 'rgb(254, 242, 242)');
+
+                          return (
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105"
+                              style={{ backgroundColor: bgColor }}
+                            >
+                              {transaction.category ? (
+                                <CategoryIcon
+                                  className="h-5 w-5"
+                                  style={{ color: iconColor }}
+                                />
+                              ) : (
+                                isIncome ? (
+                                  <ArrowUpRight className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                                ) : (
+                                  <ArrowDownRight className="h-5 w-5 text-red-600 dark:text-red-400" />
+                                )
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Transaction details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground truncate">
+                              {transaction.description}
+                            </span>
+                            {transaction.classification_source === 'ai' && (
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Sparkles className="h-3 w-3 text-violet-500" />
+                                </TooltipTrigger>
+                                <TooltipContent>Auto-categorized</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Building2 className="h-3 w-3" />
+                              {transaction.merchant_key}
+                            </span>
                             {transaction.account && (
                               <>
-                                <span className="text-slate-600">•</span>
-                                <span className="text-xs text-slate-500">
-                                  {transaction.account.name}
-                                </span>
+                                <span className="text-border">•</span>
+                                <span>{transaction.account.name}</span>
                               </>
                             )}
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="border-white/[0.2] text-white hover:bg-white/[0.05] transition-colors"
-                          style={{ borderColor: transaction.category?.color }}
-                        >
-                          {transaction.category?.name || 'Uncategorized'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className={`text-right font-semibold ${transaction.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>
-                        {formatCurrency(transaction.amount)}
-                      </TableCell>
-                      <TableCell>
-                        <Dialog open={editDialogOpen && editingTransaction?.id === transaction.id} onOpenChange={(open) => {
-                          if (!open) {
-                            setEditDialogOpen(false);
-                            setEditingTransaction(null);
-                          }
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditTransaction(transaction)}
-                              className="text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors"
-                            >
-                              <Edit2 className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="bg-slate-900 border-white/[0.1] text-white max-w-md">
-                            <DialogHeader>
-                              <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                                <div className="p-2 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl">
-                                  <Edit2 className="h-4 w-4 text-white" />
-                                </div>
-                                Edit Transaction
-                              </DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-6 pt-4">
-                              {/* Transaction Details */}
-                              <div className="p-4 bg-white/[0.03] rounded-xl border border-white/[0.05]">
-                                <p className="text-sm text-slate-400 mb-1">Description</p>
-                                <p className="font-semibold text-white">{editingTransaction?.description}</p>
-                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]">
-                                  <span className="text-sm text-slate-400">Amount</span>
-                                  <span className={`font-bold ${(editingTransaction?.amount || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                                    }`}>
-                                    {formatCurrency(editingTransaction?.amount || 0)}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between mt-2">
-                                  <span className="text-sm text-slate-400">Date</span>
-                                  <span className="text-white">
-                                    {editingTransaction && format(new Date(editingTransaction.posted_date), 'MMM dd, yyyy')}
-                                  </span>
-                                </div>
-                              </div>
 
-                              {/* Category Selection with Search */}
-                              <div className="space-y-2">
-                                <Label htmlFor="category" className="text-slate-300">Category</Label>
-                                <Popover open={categorySearchOpen} onOpenChange={setCategorySearchOpen}>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={categorySearchOpen}
-                                      className="w-full justify-between bg-white/[0.05] border-white/[0.1] text-white hover:bg-white/[0.1] hover:text-white"
-                                    >
-                                      {editForm.category_id ? (
-                                        <div className="flex items-center gap-2">
-                                          <div
-                                            className="w-3 h-3 rounded-full"
-                                            style={{
-                                              backgroundColor: categories.find((c) => c.id === editForm.category_id)?.color,
-                                            }}
-                                          />
-                                          <span>{categories.find((c) => c.id === editForm.category_id)?.name}</span>
-                                        </div>
-                                      ) : (
-                                        <span className="text-slate-500">Search categories...</span>
-                                      )}
-                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[400px] p-0 bg-slate-900 border-white/[0.1]" align="start">
-                                    <Command className="bg-slate-900 [&_[cmdk-input-wrapper]]:border-b [&_[cmdk-input-wrapper]]:border-white/[0.1] [&_[cmdk-input-wrapper]]:bg-transparent">
-                                      <CommandInput
-                                        placeholder="Search categories..."
-                                        className="h-12 bg-transparent border-0 text-white placeholder:text-slate-500 focus:ring-0 [&_svg]:text-slate-500"
-                                      />
-                                      <CommandList className="max-h-[350px]">
-                                        <CommandEmpty className="py-6 text-center text-slate-400">
-                                          No category found.
-                                        </CommandEmpty>
-                                        <CommandGroup className="overflow-y-auto max-h-[350px]">
-                                          {categories.map((category) => (
-                                            <CommandItem
-                                              key={category.id}
-                                              value={`${category.name}-${category.id}`}
-                                              onSelect={() => {
-                                                setEditForm({ ...editForm, category_id: category.id });
-                                                setCategorySearchOpen(false);
-                                              }}
-                                              className="text-white hover:bg-white/[0.1] cursor-pointer"
-                                            >
-                                              <Check
-                                                className={cn(
-                                                  'mr-2 h-4 w-4',
-                                                  editForm.category_id === category.id ? 'opacity-100' : 'opacity-0'
-                                                )}
-                                              />
-                                              <div
-                                                className="w-3 h-3 rounded-full mr-2"
-                                                style={{ backgroundColor: category.color }}
-                                              />
-                                              <span className="flex-1">{category.name}</span>
-                                              <span className="text-xs text-slate-500 capitalize">{category.type}</span>
-                                            </CommandItem>
-                                          ))}
-                                        </CommandGroup>
-                                      </CommandList>
-                                    </Command>
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
+                        {/* Category badge */}
+                        <div className="hidden sm:flex items-center">
+                          {transaction.category ? (() => {
+                            const IconComponent = (LucideIcons as any)[transaction.category.icon] || Circle;
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="font-normal transition-colors group-hover:bg-muted gap-1.5"
+                                style={{
+                                  borderColor: transaction.category.color,
+                                  color: transaction.category.color,
+                                }}
+                              >
+                                <IconComponent className="h-3 w-3" />
+                                {transaction.category.name}
+                              </Badge>
+                            );
+                          })() : (
+                            <Badge variant="outline" className="font-normal text-muted-foreground border-dashed">
+                              Uncategorized
+                            </Badge>
+                          )}
+                        </div>
 
-                              {/* Notes */}
-                              <div className="space-y-2">
-                                <Label htmlFor="notes" className="text-slate-300">Notes</Label>
-                                <Textarea
-                                  id="notes"
-                                  placeholder="Add notes about this transaction..."
-                                  value={editForm.notes}
-                                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                                  className="bg-white/[0.05] border-white/[0.1] text-white placeholder:text-slate-500 min-h-[100px] resize-none"
-                                />
-                              </div>
+                        {/* Amount */}
+                        <div className="text-right flex-shrink-0">
+                          <span className={cn(
+                            "font-semibold tabular-nums",
+                            isIncome
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-foreground"
+                          )}>
+                            {isIncome ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          </span>
+                        </div>
 
-                              {/* Bulk Update Option */}
-                              {similarTransactionsCount > 0 && (
-                                <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl space-y-3">
-                                  <div className="flex items-start gap-3">
-                                    <Checkbox
-                                      id="applyToAll"
-                                      checked={editForm.applyToAll}
-                                      onCheckedChange={(checked) =>
-                                        setEditForm({ ...editForm, applyToAll: checked as boolean })
-                                      }
-                                      className="mt-1 border-violet-500/50 data-[state=checked]:bg-violet-600"
-                                    />
-                                    <div className="flex-1">
-                                      <Label
-                                        htmlFor="applyToAll"
-                                        className="text-slate-200 font-medium cursor-pointer flex items-center gap-2"
-                                      >
-                                        <Users className="h-4 w-4 text-violet-400" />
-                                        Update all similar transactions
-                                      </Label>
-                                      <p className="text-sm text-slate-400 mt-1">
-                                        Apply this category to all <span className="text-violet-400 font-semibold">{similarTransactionsCount + 1}</span> transactions from{' '}
-                                        <span className="text-white font-medium">{editingTransaction?.merchant_key}</span>
-                                      </p>
-                                      {editForm.applyToAll && (
-                                        <p className="text-xs text-violet-300 mt-2 flex items-center gap-1">
-                                          <Sparkles className="h-3 w-3" />
-                                          Notes will only be added to this transaction
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
+                        {/* Edit indicator */}
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Edit2 className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-                              {/* Action Buttons */}
-                              <div className="flex gap-3 pt-2">
-                                <Button
-                                  onClick={() => {
-                                    setEditDialogOpen(false);
-                                    setEditingTransaction(null);
-                                  }}
-                                  variant="outline"
-                                  className="flex-1 bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.1] text-white"
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  onClick={handleSaveTransaction}
-                                  className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white border-0 shadow-lg"
-                                >
-                                  Save Changes
-                                </Button>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTransactions.length)} of {filteredTransactions.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground px-2">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Stats Footer */}
-      <div className="flex items-center justify-between text-sm">
-        <p className="text-slate-400">
-          Showing <span className="text-white font-semibold">{filteredTransactions.length}</span> of{' '}
-          <span className="text-white font-semibold">{transactions.length}</span> transactions
-        </p>
-        {filteredTransactions.length !== transactions.length && (
-          <Button
-            onClick={() => {
-              setSearchTerm('');
-              setSelectedCategory('all');
-              setSelectedAccount('all');
-            }}
-            variant="ghost"
-            className="text-slate-400 hover:text-white hover:bg-white/[0.05]"
-          >
-            Clear Filters
-          </Button>
         )}
+
+        {/* Edit Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setEditDialogOpen(false);
+            setEditingTransaction(null);
+          }
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Edit2 className="h-4 w-4 text-primary" />
+                </div>
+                Edit Transaction
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6 pt-4">
+              {/* Transaction Summary */}
+              <div className="p-4 rounded-xl bg-muted/50 border border-border">
+                <p className="text-sm text-muted-foreground mb-1">Description</p>
+                <p className="font-medium text-foreground">{editingTransaction?.description}</p>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                  <span className="text-sm text-muted-foreground">Amount</span>
+                  <span className={cn(
+                    "font-semibold",
+                    (editingTransaction?.amount || 0) >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-foreground"
+                  )}>
+                    {formatCurrency(editingTransaction?.amount || 0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm text-muted-foreground">Date</span>
+                  <span className="text-foreground">
+                    {editingTransaction && format(new Date(editingTransaction.posted_date), 'MMM d, yyyy')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Category Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Category</Label>
+                <Popover open={categorySearchOpen} onOpenChange={setCategorySearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between h-10"
+                    >
+                      {editForm.category_id ? (() => {
+                        const selectedCat = categories.find((c) => c.id === editForm.category_id);
+                        const SelectedIcon = selectedCat ? (LucideIcons as any)[selectedCat.icon] || Circle : Circle;
+                        return (
+                          <span className="flex items-center gap-2">
+                            <SelectedIcon
+                              className="h-4 w-4"
+                              style={{ color: selectedCat?.color }}
+                            />
+                            {selectedCat?.name}
+                          </span>
+                        );
+                      })() : (
+                        <span className="text-muted-foreground">Select category...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search categories..." className="h-10" />
+                      <CommandList>
+                        <CommandEmpty>No category found.</CommandEmpty>
+                        <CommandGroup>
+                          {categories.map((category) => {
+                            const IconComponent = (LucideIcons as any)[category.icon] || Circle;
+                            return (
+                              <CommandItem
+                                key={category.id}
+                                value={`${category.name}-${category.id}`}
+                                onSelect={() => {
+                                  setEditForm({ ...editForm, category_id: category.id });
+                                  setCategorySearchOpen(false);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check
+                                  className={cn(
+                                    'mr-2 h-4 w-4',
+                                    editForm.category_id === category.id ? 'opacity-100' : 'opacity-0'
+                                  )}
+                                />
+                                <IconComponent
+                                  className="h-4 w-4 mr-2"
+                                  style={{ color: category.color }}
+                                />
+                                <span className="flex-1">{category.name}</span>
+                                <span className="text-xs text-muted-foreground capitalize">{category.type}</span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Notes</Label>
+                <Textarea
+                  placeholder="Add a note..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="min-h-[80px] resize-none"
+                />
+              </div>
+
+              {/* Bulk Update Option */}
+              {similarTransactionsCount > 0 && (
+                <div className="p-4 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="applyToAll"
+                      checked={editForm.applyToAll}
+                      onCheckedChange={(checked) =>
+                        setEditForm({ ...editForm, applyToAll: checked as boolean })
+                      }
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor="applyToAll"
+                        className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                      >
+                        <Users className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        Apply to all similar transactions
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Update all {similarTransactionsCount + 1} transactions from {editingTransaction?.merchant_key}
+                      </p>
+                      {editForm.applyToAll && (
+                        <p className="text-xs text-violet-600 dark:text-violet-400 mt-2 flex items-center gap-1">
+                          <Sparkles className="h-3 w-3" />
+                          Notes will only be added to this transaction
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditDialogOpen(false);
+                    setEditingTransaction(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveTransaction} className="flex-1">
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

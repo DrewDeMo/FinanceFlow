@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -37,7 +38,7 @@ import { IconPicker } from '@/components/ui/icon-picker';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { useToast } from '@/hooks/use-toast';
 import * as LucideIcons from 'lucide-react';
-import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ArrowRightLeft, ChevronDown, ChevronRight, MoveRight, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Category {
@@ -55,6 +56,15 @@ interface Category {
     customization_id: string | null;
 }
 
+interface Transaction {
+    id: string;
+    posted_date: string;
+    description: string;
+    amount: number;
+    merchant_key: string;
+    category_id: string | null;
+}
+
 export default function CategoriesPage() {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -63,6 +73,18 @@ export default function CategoriesPage() {
     const [loading, setLoading] = useState(true);
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'transfer'>('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [hideEmpty, setHideEmpty] = useState(true);
+
+    // Expanded categories state
+    const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+    const [categoryTransactions, setCategoryTransactions] = useState<Map<string, Transaction[]>>(new Map());
+    const [loadingTransactions, setLoadingTransactions] = useState<Set<string>>(new Set());
+
+    // Transaction selection state
+    const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
+    const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+    const [targetCategoryId, setTargetCategoryId] = useState('');
+    const [movingTransactions, setMovingTransactions] = useState(false);
 
     // Edit dialog state
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -78,7 +100,7 @@ export default function CategoriesPage() {
     const [newForm, setNewForm] = useState({
         name: '',
         type: 'expense' as 'income' | 'expense' | 'transfer',
-        icon: 'circle',
+        icon: 'Circle',
         color: '#6B7280',
     });
 
@@ -112,8 +134,6 @@ export default function CategoriesPage() {
             }
 
             const data = await response.json();
-            console.log('Categories loaded:', data.categories?.length || 0);
-            console.log('Sample category:', data.categories?.[0]);
             setCategories(data.categories || []);
         } catch (error) {
             console.error('Error loading categories:', error);
@@ -124,6 +144,141 @@ export default function CategoriesPage() {
             });
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function loadTransactionsForCategory(categoryId: string) {
+        if (categoryTransactions.has(categoryId)) {
+            return; // Already loaded
+        }
+
+        setLoadingTransactions(prev => new Set(prev).add(categoryId));
+
+        try {
+            const session = await supabase.auth.getSession();
+            const token = session.data.session?.access_token;
+
+            if (!token) {
+                throw new Error('No access token');
+            }
+
+            const response = await fetch(`/api/transactions?category_id=${categoryId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch transactions');
+            }
+
+            const data = await response.json();
+            setCategoryTransactions(prev => new Map(prev).set(categoryId, data.transactions || []));
+        } catch (error) {
+            console.error('Error loading transactions:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to load transactions',
+                variant: 'destructive',
+            });
+        } finally {
+            setLoadingTransactions(prev => {
+                const next = new Set(prev);
+                next.delete(categoryId);
+                return next;
+            });
+        }
+    }
+
+    function toggleCategoryExpanded(categoryId: string) {
+        setExpandedCategories(prev => {
+            const next = new Set(prev);
+            if (next.has(categoryId)) {
+                next.delete(categoryId);
+            } else {
+                next.add(categoryId);
+                loadTransactionsForCategory(categoryId);
+            }
+            return next;
+        });
+    }
+
+    function toggleTransactionSelection(transactionId: string) {
+        setSelectedTransactions(prev => {
+            const next = new Set(prev);
+            if (next.has(transactionId)) {
+                next.delete(transactionId);
+            } else {
+                next.add(transactionId);
+            }
+            return next;
+        });
+    }
+
+    function openMoveDialog() {
+        if (selectedTransactions.size === 0) {
+            toast({
+                title: 'No transactions selected',
+                description: 'Please select transactions to move',
+                variant: 'destructive',
+            });
+            return;
+        }
+        setMoveDialogOpen(true);
+    }
+
+    async function handleMoveTransactions() {
+        if (!targetCategoryId || selectedTransactions.size === 0) {
+            return;
+        }
+
+        setMovingTransactions(true);
+
+        try {
+            const session = await supabase.auth.getSession();
+            const token = session.data.session?.access_token;
+
+            if (!token) {
+                throw new Error('No access token');
+            }
+
+            const response = await fetch('/api/transactions', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    transactionIds: Array.from(selectedTransactions),
+                    newCategoryId: targetCategoryId,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to move transactions');
+            }
+
+            toast({
+                title: 'Success',
+                description: `Moved ${selectedTransactions.size} transaction(s)`,
+            });
+
+            // Clear selections and refresh
+            setSelectedTransactions(new Set());
+            setMoveDialogOpen(false);
+            setTargetCategoryId('');
+            setCategoryTransactions(new Map()); // Clear cache
+            setExpandedCategories(new Set()); // Collapse all
+            loadCategories();
+        } catch (error) {
+            console.error('Error moving transactions:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to move transactions',
+                variant: 'destructive',
+            });
+        } finally {
+            setMovingTransactions(false);
         }
     }
 
@@ -281,7 +436,8 @@ export default function CategoriesPage() {
     const filteredCategories = categories.filter((category) => {
         const matchesType = filterType === 'all' || category.type === filterType;
         const matchesSearch = category.name.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesType && matchesSearch;
+        const matchesEmpty = !hideEmpty || category.transaction_count > 0;
+        return matchesType && matchesSearch && matchesEmpty;
     });
 
     const groupedCategories = {
@@ -292,9 +448,12 @@ export default function CategoriesPage() {
 
     function CategoryCard({ category }: { category: Category }) {
         const IconComponent = (LucideIcons as any)[category.icon] || LucideIcons.Circle;
+        const isExpanded = expandedCategories.has(category.id);
+        const transactions = categoryTransactions.get(category.id) || [];
+        const isLoadingTrans = loadingTransactions.has(category.id);
 
         return (
-            <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl hover:bg-white/[0.05] transition-all group">
+            <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl hover:bg-white/[0.05] transition-all">
                 {/* Gradient accent */}
                 <div
                     className="absolute top-0 left-0 right-0 h-1"
@@ -303,7 +462,20 @@ export default function CategoriesPage() {
 
                 <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1">
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => toggleCategoryExpanded(category.id)}
+                                className="h-8 w-8 p-0 hover:bg-white/[0.1]"
+                                disabled={category.transaction_count === 0}
+                            >
+                                {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                                ) : (
+                                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                                )}
+                            </Button>
                             <div
                                 className="p-2.5 rounded-xl"
                                 style={{ backgroundColor: `${category.color}20` }}
@@ -342,7 +514,7 @@ export default function CategoriesPage() {
                             </div>
                         </div>
 
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1">
                             <Button
                                 size="sm"
                                 variant="ghost"
@@ -364,7 +536,7 @@ export default function CategoriesPage() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="bg-white/[0.02] rounded-lg p-2.5">
                             <p className="text-xs text-slate-500 mb-1">Transactions</p>
                             <p className="text-lg font-semibold text-white">
@@ -381,6 +553,50 @@ export default function CategoriesPage() {
                             </p>
                         </div>
                     </div>
+
+                    {/* Expanded Transaction List */}
+                    {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                            {isLoadingTrans ? (
+                                <div className="flex items-center justify-center py-4">
+                                    <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
+                                </div>
+                            ) : transactions.length > 0 ? (
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {transactions.map((transaction) => (
+                                        <div
+                                            key={transaction.id}
+                                            className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] transition-colors"
+                                        >
+                                            <Checkbox
+                                                checked={selectedTransactions.has(transaction.id)}
+                                                onCheckedChange={() => toggleTransactionSelection(transaction.id)}
+                                                className="border-white/[0.2]"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm text-white truncate">
+                                                    {transaction.description}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {new Date(transaction.posted_date).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <p className="text-sm font-semibold text-white">
+                                                ${Math.abs(transaction.amount).toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                })}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-slate-500 text-center py-4">
+                                    No transactions found
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         );
@@ -401,16 +617,27 @@ export default function CategoriesPage() {
                 <div>
                     <h1 className="text-3xl font-bold text-white mb-2">Category Management</h1>
                     <p className="text-slate-400">
-                        Manage your transaction categories and customize their appearance
+                        Manage your transaction categories and organize your transactions
                     </p>
                 </div>
-                <Button
-                    onClick={() => setNewDialogOpen(true)}
-                    className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
-                >
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Category
-                </Button>
+                <div className="flex gap-2">
+                    {selectedTransactions.size > 0 && (
+                        <Button
+                            onClick={openMoveDialog}
+                            className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
+                        >
+                            <MoveRight className="h-4 w-4 mr-2" />
+                            Move {selectedTransactions.size} Selected
+                        </Button>
+                    )}
+                    <Button
+                        onClick={() => setNewDialogOpen(true)}
+                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Category
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -436,6 +663,19 @@ export default function CategoriesPage() {
                                 <SelectItem value="transfer">Transfer</SelectItem>
                             </SelectContent>
                         </Select>
+                        <Button
+                            variant="outline"
+                            onClick={() => setHideEmpty(!hideEmpty)}
+                            className={cn(
+                                "border-white/[0.1] transition-colors",
+                                hideEmpty
+                                    ? "bg-violet-500/20 text-violet-300 hover:bg-violet-500/30"
+                                    : "text-slate-400 hover:bg-white/[0.05]"
+                            )}
+                        >
+                            {hideEmpty ? <Eye className="h-4 w-4 mr-2" /> : <EyeOff className="h-4 w-4 mr-2" />}
+                            {hideEmpty ? 'Show Empty' : 'Hide Empty'}
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
@@ -486,7 +726,7 @@ export default function CategoriesPage() {
                         <TrendingUp className="h-5 w-5 text-green-500" />
                         Income Categories
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {groupedCategories.income.map((category) => (
                             <CategoryCard key={category.id} category={category} />
                         ))}
@@ -500,7 +740,7 @@ export default function CategoriesPage() {
                         <TrendingDown className="h-5 w-5 text-red-500" />
                         Expense Categories
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {groupedCategories.expense.map((category) => (
                             <CategoryCard key={category.id} category={category} />
                         ))}
@@ -514,7 +754,7 @@ export default function CategoriesPage() {
                         <ArrowRightLeft className="h-5 w-5 text-blue-500" />
                         Transfer Categories
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {groupedCategories.transfer.map((category) => (
                             <CategoryCard key={category.id} category={category} />
                         ))}
@@ -525,10 +765,74 @@ export default function CategoriesPage() {
             {filteredCategories.length === 0 && (
                 <Card className="border-0 bg-white/[0.03] backdrop-blur-xl">
                     <CardContent className="p-12 text-center">
-                        <p className="text-slate-400">No categories found</p>
+                        <p className="text-slate-400">
+                            {hideEmpty
+                                ? 'No categories with transactions found. Click "Show Empty" to see all categories.'
+                                : 'No categories found'}
+                        </p>
                     </CardContent>
                 </Card>
             )}
+
+            {/* Move Transactions Dialog */}
+            <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+                <DialogContent className="bg-slate-900 border-white/[0.1] text-white">
+                    <DialogHeader>
+                        <DialogTitle>Move Transactions</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Move {selectedTransactions.size} selected transaction(s) to a different category
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="target-category">Target Category *</Label>
+                            <Select value={targetCategoryId} onValueChange={setTargetCategoryId}>
+                                <SelectTrigger className="bg-white/[0.05] border-white/[0.1] text-white">
+                                    <SelectValue placeholder="Select a category" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-white/[0.1]">
+                                    {categories.map((cat) => (
+                                        <SelectItem key={cat.id} value={cat.id}>
+                                            {cat.name} ({cat.type})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setMoveDialogOpen(false);
+                                setTargetCategoryId('');
+                            }}
+                            disabled={movingTransactions}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleMoveTransactions}
+                            className="bg-violet-500 hover:bg-violet-600"
+                            disabled={!targetCategoryId || movingTransactions}
+                        >
+                            {movingTransactions ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Moving...
+                                </>
+                            ) : (
+                                <>
+                                    <MoveRight className="h-4 w-4 mr-2" />
+                                    Move Transactions
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Edit Category Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

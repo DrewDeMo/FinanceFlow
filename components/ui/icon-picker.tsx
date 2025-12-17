@@ -12,143 +12,70 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
-// Curated list of relevant financial and lifestyle icons
+// Common Lucide icons for categories
 export const CATEGORY_ICONS = [
-    // Money & Finance
-    'banknote',
-    'circle-dollar-sign',
-    'coins',
-    'credit-card',
-    'landmark',
-    'piggy-bank',
-    'receipt',
-    'wallet',
-    'trending-up',
-    'trending-down',
-    'bar-chart-3',
-    'line-chart',
-
-    // Shopping & Food
-    'shopping-cart',
-    'shopping-bag',
-    'store',
-    'utensils',
-    'coffee',
-    'pizza',
-    'apple',
-    'wine',
-    'ice-cream',
-
-    // Transportation
-    'car',
-    'bike',
-    'bus',
-    'plane',
-    'train',
-    'ship',
-    'fuel',
-    'parking-circle',
-
-    // Home & Utilities
-    'home',
-    'building',
-    'building-2',
-    'warehouse',
-    'zap',
-    'droplet',
-    'wifi',
-    'phone',
-    'smartphone',
-    'tv',
-
-    // Health & Fitness
-    'heart',
-    'heart-pulse',
-    'pill',
-    'stethoscope',
-    'activity',
-    'dumbbell',
-    'bike',
-
-    // Entertainment & Leisure
-    'film',
-    'music',
-    'gamepad-2',
-    'ticket',
-    'party-popper',
-    'palette',
-    'camera',
-    'video',
-
-    // Education & Work
-    'graduation-cap',
-    'book-open',
-    'briefcase',
-    'laptop',
-    'pencil',
-    'calendar',
-
-    // Personal Care
-    'scissors',
-    'shirt',
-    'gem',
-    'shopping-basket',
-    'glasses',
-
-    // Miscellaneous
-    'gift',
-    'gift-card',
-    'shield',
-    'umbrella',
-    'key',
-    'wrench',
-    'hammer',
-    'paint-bucket',
-    'leaf',
-    'tree-palm',
-    'paw-print',
-    'baby',
-    'users',
-    'user',
-    'mail',
-    'message-circle',
-    'bell',
-    'star',
-    'award',
-    'trophy',
-    'flag',
-    'bookmark',
-    'tag',
-    'package',
-    'box',
-    'archive',
-    'file-text',
-    'clipboard',
-    'calendar-days',
-    'clock',
-    'timer',
-    'hourglass',
-    'repeat',
-    'refresh-cw',
-    'arrow-right-left',
-    'arrow-up-right',
-    'arrow-down-right',
-    'circle',
-    'square',
-    'triangle',
-    'diamond',
-    'hexagon',
-    'octagon',
-    'help-circle',
-    'info',
-    'alert-circle',
-    'alert-triangle',
-    'check-circle',
-    'x-circle',
-    'minus-circle',
-    'plus-circle',
-    'undo-2',
-    'rotate-ccw',
+    'Wallet',
+    'CreditCard',
+    'Banknote',
+    'DollarSign',
+    'Receipt',
+    'PiggyBank',
+    'Landmark',
+    'TrendingUp',
+    'TrendingDown',
+    'ShoppingCart',
+    'ShoppingBag',
+    'Store',
+    'Utensils',
+    'Coffee',
+    'Home',
+    'Car',
+    'Fuel',
+    'Plane',
+    'Train',
+    'Bus',
+    'Bike',
+    'Heart',
+    'Activity',
+    'Dumbbell',
+    'Film',
+    'Music',
+    'Gamepad2',
+    'Book',
+    'BookOpen',
+    'GraduationCap',
+    'Briefcase',
+    'Laptop',
+    'Smartphone',
+    'Phone',
+    'Tv',
+    'Wifi',
+    'Zap',
+    'Droplet',
+    'Gift',
+    'Shirt',
+    'Scissors',
+    'Wrench',
+    'Hammer',
+    'Package',
+    'Tag',
+    'Star',
+    'Heart',
+    'Users',
+    'User',
+    'Baby',
+    'Shield',
+    'Umbrella',
+    'Calendar',
+    'Clock',
+    'Bell',
+    'Mail',
+    'Archive',
+    'Trash2',
+    'Circle',
+    'Square',
+    'Triangle',
+    'Hexagon',
 ];
 
 interface IconPickerProps {
@@ -168,9 +95,12 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
         );
     }, [search]);
 
-    const SelectedIcon = value
-        ? (LucideIcons[value as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>)
-        : LucideIcons.Circle;
+    // Get the selected icon component or default to Circle
+    const SelectedIconComponent = React.useMemo(() => {
+        if (!value) return LucideIcons.Circle;
+        const Icon = (LucideIcons as any)[value];
+        return Icon || LucideIcons.Circle;
+    }, [value]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -183,9 +113,9 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                     className="w-full justify-between bg-white/[0.05] border-white/[0.1] text-white hover:bg-white/[0.1] hover:text-white"
                 >
                     <div className="flex items-center gap-2">
-                        <SelectedIcon className="h-4 w-4" />
-                        <span className="capitalize">
-                            {value ? value.replace(/-/g, ' ') : 'Select icon...'}
+                        <SelectedIconComponent className="h-4 w-4" />
+                        <span>
+                            {value ? value.replace(/([A-Z])/g, ' $1').trim() : 'Select icon...'}
                         </span>
                     </div>
                     <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -203,7 +133,7 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                 <ScrollArea className="h-[300px]">
                     <div className="grid grid-cols-8 gap-1 p-2">
                         {filteredIcons.map((iconName) => {
-                            const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>;
+                            const IconComponent = (LucideIcons as any)[iconName] || LucideIcons.Circle;
                             const isSelected = value === iconName;
 
                             return (
@@ -220,7 +150,7 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                                         setOpen(false);
                                         setSearch('');
                                     }}
-                                    title={iconName.replace(/-/g, ' ')}
+                                    title={iconName.replace(/([A-Z])/g, ' $1').trim()}
                                 >
                                     <IconComponent className={cn(
                                         'h-4 w-4',

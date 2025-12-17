@@ -87,12 +87,58 @@ export async function POST(request: NextRequest) {
         let classification_source: 'default' | 'manual' = 'default';
 
         if (mapping.category) {
-          const categoryValue = row[mapping.category]?.trim();
+          let categoryValue = row[mapping.category]?.trim();
           if (categoryValue) {
-            const matchedCategoryId = categoryMap.get(categoryValue.toLowerCase());
+            const originalCategoryValue = categoryValue;
+            const isNoCategory = categoryValue.toLowerCase() === 'no category';
+
+            // Normalize "No Category" to "Uncategorized"
+            if (isNoCategory) {
+              categoryValue = 'Uncategorized';
+            }
+
+            // Try to find existing category (case-insensitive, handle special characters)
+            const normalizedCategory = categoryValue.toLowerCase().trim();
+            let matchedCategoryId = categoryMap.get(normalizedCategory);
+
+            // If no match found, create a custom category for this user
+            if (!matchedCategoryId) {
+              // Determine category type based on transaction type or category name
+              let categoryType: 'income' | 'expense' | 'transfer' = 'expense';
+
+              const incomeCategoryNames = ['paycheck', 'salary', 'income', 'refund', 'deposit', 'bonus', 'payment received'];
+              const transferCategoryNames = ['transfer', 'internal transfer', 'payment'];
+
+              if (incomeCategoryNames.some(name => normalizedCategory.includes(name)) || amount >= 0) {
+                categoryType = 'income';
+              } else if (transferCategoryNames.some(name => normalizedCategory === name)) {
+                categoryType = 'transfer';
+              }
+
+              const newCategoryResult = await supabase
+                .from('categories')
+                .insert({
+                  user_id: userId,
+                  name: categoryValue,
+                  type: categoryType,
+                  is_system: false,
+                })
+                .select('id')
+                .single();
+
+              if (newCategoryResult.data) {
+                matchedCategoryId = newCategoryResult.data.id;
+                // Add to cache for subsequent rows
+                categoryMap.set(normalizedCategory, matchedCategoryId);
+                console.log(`Created new ${categoryType} category: ${categoryValue}`);
+              }
+            }
+
             if (matchedCategoryId) {
               category_id = matchedCategoryId;
-              classification_source = 'manual';
+              // If CSV said "No Category", mark as 'default' so categorization rules can run
+              // Otherwise mark as 'manual' since user explicitly provided the category
+              classification_source = isNoCategory ? 'default' : 'manual';
             }
           }
         }

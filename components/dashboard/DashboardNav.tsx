@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  FolderKanban,
 } from 'lucide-react';
 
 const navItems = [
@@ -34,6 +35,12 @@ const navItems = [
     href: '/dashboard/transactions',
     icon: CreditCard,
     gradient: 'from-blue-500 to-cyan-500',
+  },
+  {
+    name: 'Categories',
+    href: '/dashboard/categories',
+    icon: FolderKanban,
+    gradient: 'from-pink-500 to-rose-500',
   },
   {
     name: 'Import Data',

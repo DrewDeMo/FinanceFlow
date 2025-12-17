@@ -116,6 +116,40 @@
     scroll-behavior: smooth;
   }
 
+  /* Global smooth transitions for interactive elements */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  [tabindex]:not([tabindex="-1"]) {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* Ensure all divs used as interactive containers get smooth transitions */
+  div {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* SVG elements for icon transitions */
+  svg {
+    transition-property: color, fill, stroke, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* Span elements often used for text that changes color */
+  span {
+    transition-property: color, background-color, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
   /* Better focus states */
   *:focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
@@ -203,7 +237,11 @@
     @apply bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent;
   }
 
-  /* Reduced Motion Support */
+  /*
+   * Reduced Motion Support
+   * Only disable animations, NOT transitions
+   * Transitions for hover states should still work for usability feedback
+   */
   @media (prefers-reduced-motion: reduce) {
 
     *,
@@ -211,7 +249,8 @@
     *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      /* DO NOT disable transitions - they provide important UI feedback */
+      /* transition-duration: 0.01ms !important; */
     }
 
     html {
@@ -280,4 +319,85 @@
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
     @apply bg-secondary text-muted-foreground;
   }
+}
+
+/*
+ * CRITICAL: Global Transition Fix
+ * This must be OUTSIDE @layer to ensure highest specificity
+ * Ensures all hover/interactive states animate smoothly
+ */
+
+/* Base shadow for elements that will get shadows on hover - CSS needs a starting value to interpolate */
+.shadow-sm,
+.shadow-md,
+.shadow-lg,
+.shadow-xl,
+.shadow-card,
+.shadow-elevated,
+.shadow-modal,
+.shadow-subtle,
+[class*="hover:shadow"] {
+  box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent;
+  transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Global smooth transitions - highest specificity for all interactive elements */
+a:not([class*="transition-none"]),
+button:not([class*="transition-none"]),
+[role="button"]:not([class*="transition-none"]) {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Ensure cards and containers transition smoothly */
+.rounded-xl,
+.rounded-2xl,
+.rounded-lg {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Navigation items with hover effects */
+nav a,
+nav div,
+aside a,
+aside div {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Icon transitions in nav */
+nav svg,
+aside svg,
+button svg {
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Table rows with hover */
+tr {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Badge and tag transitions */
+.badge,
+[class*="badge-"] {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }

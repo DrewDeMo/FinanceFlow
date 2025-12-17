@@ -76,11 +76,11 @@ export function ColorPicker({ value, onValueChange, disabled }: ColorPickerProps
                 <Button
                     variant="outline"
                     disabled={disabled}
-                    className="w-full justify-start bg-white/[0.05] border-white/[0.1] text-white hover:bg-white/[0.1] hover:text-white"
+                    className="w-full justify-start h-10"
                 >
                     <div className="flex items-center gap-2 w-full">
                         <div
-                            className="h-5 w-5 rounded border border-white/[0.2] flex-shrink-0"
+                            className="h-5 w-5 rounded border border-border flex-shrink-0"
                             style={{ backgroundColor: displayColor }}
                         />
                         <span className="flex-1 text-left">
@@ -89,10 +89,10 @@ export function ColorPicker({ value, onValueChange, disabled }: ColorPickerProps
                     </div>
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[280px] p-0 bg-slate-900 border-white/[0.1]" align="start">
+            <PopoverContent className="w-[280px] p-0" align="start">
                 <div className="p-4 space-y-4">
                     <div>
-                        <Label className="text-slate-300 text-xs font-medium mb-3 block">Preset Colors</Label>
+                        <Label className="text-muted-foreground text-xs font-medium mb-3 block">Preset Colors</Label>
                         <div className="grid grid-cols-6 gap-2">
                             {CATEGORY_COLORS.map((color) => {
                                 const isSelected = value?.toLowerCase() === color.value.toLowerCase();
@@ -103,7 +103,7 @@ export function ColorPicker({ value, onValueChange, disabled }: ColorPickerProps
                                         type="button"
                                         className={cn(
                                             'h-10 w-10 rounded-lg border-2 transition-all hover:scale-110 relative group',
-                                            isSelected ? 'border-white shadow-lg scale-110' : 'border-transparent'
+                                            isSelected ? 'border-foreground shadow-lg scale-110' : 'border-transparent'
                                         )}
                                         style={{ backgroundColor: color.value }}
                                         onClick={() => {
@@ -122,8 +122,8 @@ export function ColorPicker({ value, onValueChange, disabled }: ColorPickerProps
                         </div>
                     </div>
 
-                    <div className="pt-3 border-t border-white/[0.1]">
-                        <Label htmlFor="custom-color" className="text-slate-300 text-xs font-medium mb-2 block">
+                    <div className="pt-3 border-t border-border">
+                        <Label htmlFor="custom-color" className="text-muted-foreground text-xs font-medium mb-2 block">
                             Custom Color
                         </Label>
                         <div className="flex gap-2">
@@ -132,7 +132,7 @@ export function ColorPicker({ value, onValueChange, disabled }: ColorPickerProps
                                 type="color"
                                 value={customColor}
                                 onChange={handleCustomColorChange}
-                                className="h-10 w-16 p-1 bg-white/[0.05] border-white/[0.1] cursor-pointer"
+                                className="h-10 w-16 p-1 cursor-pointer"
                             />
                             <Input
                                 type="text"
@@ -144,7 +144,7 @@ export function ColorPicker({ value, onValueChange, disabled }: ColorPickerProps
                                     }
                                 }}
                                 placeholder="#6B7280"
-                                className="flex-1 bg-white/[0.05] border-white/[0.1] text-white placeholder:text-slate-500"
+                                className="flex-1"
                             />
                         </div>
                     </div>

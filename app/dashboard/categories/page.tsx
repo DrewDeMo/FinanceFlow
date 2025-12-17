@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -38,7 +38,24 @@ import { IconPicker } from '@/components/ui/icon-picker';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { useToast } from '@/hooks/use-toast';
 import * as LucideIcons from 'lucide-react';
-import { Loader2, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ArrowRightLeft, ChevronDown, ChevronRight, MoveRight, Eye, EyeOff } from 'lucide-react';
+import {
+    Loader2,
+    Plus,
+    Pencil,
+    Trash2,
+    TrendingUp,
+    TrendingDown,
+    ArrowRightLeft,
+    ChevronDown,
+    ChevronRight,
+    MoveRight,
+    Eye,
+    EyeOff,
+    Search,
+    Tag,
+    Circle,
+    Sparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Category {
@@ -446,152 +463,209 @@ export default function CategoriesPage() {
         transfer: filteredCategories.filter((c) => c.type === 'transfer'),
     };
 
+    // Stats
+    const totalCategories = categories.length;
+    const categoriesWithTransactions = categories.filter(c => c.transaction_count > 0).length;
+
+    // Get selected transactions for a specific category
+    function getSelectedForCategory(categoryId: string): string[] {
+        const transactions = categoryTransactions.get(categoryId) || [];
+        return transactions.filter(t => selectedTransactions.has(t.id)).map(t => t.id);
+    }
+
+    // Select all transactions in a category
+    function selectAllInCategory(categoryId: string) {
+        const transactions = categoryTransactions.get(categoryId) || [];
+        setSelectedTransactions(prev => {
+            const next = new Set(prev);
+            transactions.forEach(t => next.add(t.id));
+            return next;
+        });
+    }
+
+    // Deselect all transactions in a category
+    function deselectAllInCategory(categoryId: string) {
+        const transactions = categoryTransactions.get(categoryId) || [];
+        setSelectedTransactions(prev => {
+            const next = new Set(prev);
+            transactions.forEach(t => next.delete(t.id));
+            return next;
+        });
+    }
+
     function CategoryCard({ category }: { category: Category }) {
         const IconComponent = (LucideIcons as any)[category.icon] || LucideIcons.Circle;
         const isExpanded = expandedCategories.has(category.id);
         const transactions = categoryTransactions.get(category.id) || [];
         const isLoadingTrans = loadingTransactions.has(category.id);
+        const hasTransactions = category.transaction_count > 0;
+        const selectedInCategory = getSelectedForCategory(category.id);
+        const allSelected = transactions.length > 0 && selectedInCategory.length === transactions.length;
 
         return (
-            <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl hover:bg-white/[0.05] transition-all">
-                {/* Gradient accent */}
-                <div
-                    className="absolute top-0 left-0 right-0 h-1"
-                    style={{ backgroundColor: category.color }}
-                />
+            <Card className="group transition-all hover:shadow-card hover:border-border">
+                <CardContent className="p-0">
+                    {/* Main row - clickable to expand */}
+                    <div
+                        className={cn(
+                            "flex items-center gap-3 p-4",
+                            hasTransactions && "cursor-pointer"
+                        )}
+                        onClick={() => hasTransactions && toggleCategoryExpanded(category.id)}
+                    >
+                        {/* Category icon with color */}
+                        <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: `${category.color}15` }}
+                        >
+                            <IconComponent
+                                className="h-5 w-5"
+                                style={{ color: category.color }}
+                            />
+                        </div>
 
-                <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3 flex-1">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => toggleCategoryExpanded(category.id)}
-                                className="h-8 w-8 p-0 hover:bg-white/[0.1]"
-                                disabled={category.transaction_count === 0}
-                            >
-                                {isExpanded ? (
-                                    <ChevronDown className="h-4 w-4 text-slate-400" />
-                                ) : (
-                                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                                )}
-                            </Button>
-                            <div
-                                className="p-2.5 rounded-xl"
-                                style={{ backgroundColor: `${category.color}20` }}
-                            >
-                                <IconComponent
-                                    className="h-5 w-5"
-                                    style={{ color: category.color }}
-                                />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-white flex items-center gap-2">
+                        {/* Category info */}
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-medium text-foreground truncate">
                                     {category.name}
-                                    {category.has_customization && (
-                                        <Badge variant="outline" className="text-xs border-violet-500/50 text-violet-400">
-                                            Customized
-                                        </Badge>
-                                    )}
                                 </h3>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Badge
-                                        variant="outline"
-                                        className="text-xs capitalize"
-                                        style={{
-                                            borderColor: `${category.color}40`,
-                                            color: category.color,
-                                        }}
-                                    >
-                                        {category.type}
+                                <Badge
+                                    variant="outline"
+                                    className="text-xs capitalize font-normal hidden sm:inline-flex"
+                                    style={{
+                                        borderColor: `${category.color}40`,
+                                        color: category.color,
+                                    }}
+                                >
+                                    {category.type}
+                                </Badge>
+                                {category.has_customization && (
+                                    <Badge variant="secondary" className="text-xs gap-1 hidden sm:inline-flex">
+                                        <Sparkles className="h-3 w-3" />
+                                        Customized
                                     </Badge>
-                                    {category.is_system && (
-                                        <Badge variant="outline" className="text-xs border-slate-600 text-slate-400">
-                                            System
-                                        </Badge>
-                                    )}
-                                </div>
+                                )}
+                                {category.is_system && (
+                                    <Badge variant="outline" className="text-xs hidden sm:inline-flex">
+                                        System
+                                    </Badge>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5 text-sm text-muted-foreground">
+                                <span>{category.transaction_count.toLocaleString()} transactions</span>
+                                <span className="text-border">•</span>
+                                <span className="font-medium tabular-nums">
+                                    ${Math.abs(category.total_amount).toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                    })}
+                                </span>
                             </div>
                         </div>
 
-                        <div className="flex gap-1">
+                        {/* Action buttons - always visible but subtle */}
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => openEditDialog(category)}
-                                className="h-8 w-8 p-0 hover:bg-white/[0.1]"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                             >
-                                <Pencil className="h-4 w-4 text-slate-400" />
+                                <Pencil className="h-4 w-4" />
                             </Button>
                             {!category.is_system && (
                                 <Button
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => openDeleteDialog(category)}
-                                    className="h-8 w-8 p-0 hover:bg-red-500/[0.1] hover:text-red-400"
+                                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
                             )}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div className="bg-white/[0.02] rounded-lg p-2.5">
-                            <p className="text-xs text-slate-500 mb-1">Transactions</p>
-                            <p className="text-lg font-semibold text-white">
-                                {category.transaction_count.toLocaleString()}
-                            </p>
-                        </div>
-                        <div className="bg-white/[0.02] rounded-lg p-2.5">
-                            <p className="text-xs text-slate-500 mb-1">Total Amount</p>
-                            <p className="text-lg font-semibold text-white">
-                                ${Math.abs(category.total_amount).toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                })}
-                            </p>
+                            {hasTransactions && (
+                                <div className="ml-1">
+                                    {isExpanded ? (
+                                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* Expanded Transaction List */}
                     {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                        <div className="border-t border-border bg-muted/30">
                             {isLoadingTrans ? (
-                                <div className="flex items-center justify-center py-4">
-                                    <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
                                 </div>
                             ) : transactions.length > 0 ? (
-                                <div className="space-y-2 max-h-96 overflow-y-auto">
-                                    {transactions.map((transaction) => (
-                                        <div
-                                            key={transaction.id}
-                                            className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] transition-colors"
-                                        >
+                                <>
+                                    {/* Selection toolbar - appears inside the expanded section */}
+                                    <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border">
+                                        <div className="flex items-center gap-3">
                                             <Checkbox
-                                                checked={selectedTransactions.has(transaction.id)}
-                                                onCheckedChange={() => toggleTransactionSelection(transaction.id)}
-                                                className="border-white/[0.2]"
+                                                checked={allSelected}
+                                                onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                        selectAllInCategory(category.id);
+                                                    } else {
+                                                        deselectAllInCategory(category.id);
+                                                    }
+                                                }}
                                             />
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm text-white truncate">
-                                                    {transaction.description}
-                                                </p>
-                                                <p className="text-xs text-slate-500">
-                                                    {new Date(transaction.posted_date).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                            <p className="text-sm font-semibold text-white">
-                                                ${Math.abs(transaction.amount).toLocaleString(undefined, {
-                                                    minimumFractionDigits: 2,
-                                                    maximumFractionDigits: 2,
-                                                })}
-                                            </p>
+                                            <span className="text-sm text-muted-foreground">
+                                                {selectedInCategory.length > 0
+                                                    ? `${selectedInCategory.length} selected`
+                                                    : 'Select all'}
+                                            </span>
                                         </div>
-                                    ))}
-                                </div>
+                                        {selectedInCategory.length > 0 && (
+                                            <Button
+                                                size="sm"
+                                                onClick={openMoveDialog}
+                                                className="gap-2"
+                                            >
+                                                <MoveRight className="h-4 w-4" />
+                                                Move to Category
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <div className="divide-y divide-border max-h-80 overflow-y-auto">
+                                        {transactions.map((transaction) => (
+                                            <label
+                                                key={transaction.id}
+                                                className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <Checkbox
+                                                    checked={selectedTransactions.has(transaction.id)}
+                                                    onCheckedChange={() => toggleTransactionSelection(transaction.id)}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-foreground truncate">
+                                                        {transaction.description}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {new Date(transaction.posted_date).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                <p className="text-sm font-semibold text-foreground tabular-nums">
+                                                    ${Math.abs(transaction.amount).toLocaleString(undefined, {
+                                                        minimumFractionDigits: 2,
+                                                        maximumFractionDigits: 2,
+                                                    })}
+                                                </p>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </>
                             ) : (
-                                <p className="text-sm text-slate-500 text-center py-4">
+                                <p className="text-sm text-muted-foreground text-center py-8">
                                     No transactions found
                                 </p>
                             )}
@@ -604,205 +678,279 @@ export default function CategoriesPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+            <div className="flex items-center justify-center min-h-[50vh]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen p-6 space-y-6">
+        <div className="p-6 lg:p-8 max-w-7xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Category Management</h1>
-                    <p className="text-slate-400">
-                        Manage your transaction categories and organize your transactions
+                    <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+                        Categories
+                    </h1>
+                    <p className="text-muted-foreground mt-1">
+                        Manage your transaction categories and organize your finances
                     </p>
                 </div>
                 <div className="flex gap-2">
                     {selectedTransactions.size > 0 && (
                         <Button
                             onClick={openMoveDialog}
-                            className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
+                            variant="outline"
+                            className="gap-2"
                         >
-                            <MoveRight className="h-4 w-4 mr-2" />
+                            <MoveRight className="h-4 w-4" />
                             Move {selectedTransactions.size} Selected
                         </Button>
                     )}
-                    <Button
-                        onClick={() => setNewDialogOpen(true)}
-                        className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
-                    >
-                        <Plus className="h-4 w-4 mr-2" />
+                    <Button onClick={() => setNewDialogOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
                         New Category
                     </Button>
                 </div>
             </div>
 
+            {/* Stats Overview */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="stat-card">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center">
+                            <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-semibold text-foreground">
+                                {groupedCategories.income.length}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Income</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="stat-card">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center">
+                            <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-semibold text-foreground">
+                                {groupedCategories.expense.length}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Expense</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="stat-card">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center">
+                            <ArrowRightLeft className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-semibold text-foreground">
+                                {groupedCategories.transfer.length}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Transfer</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="stat-card">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center">
+                            <Tag className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-semibold text-foreground">
+                                {categoriesWithTransactions}
+                            </p>
+                            <p className="text-sm text-muted-foreground">In Use</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Filters */}
-            <Card className="border-0 bg-white/[0.03] backdrop-blur-xl">
+            <Card className="mb-6">
                 <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex-1">
+                        {/* Search */}
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search categories..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="bg-white/[0.05] border-white/[0.1] text-white placeholder:text-slate-500"
+                                className="pl-9 h-10"
                             />
                         </div>
+
+                        {/* Type filter */}
                         <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-                            <SelectTrigger className="w-full sm:w-[180px] bg-white/[0.05] border-white/[0.1] text-white">
+                            <SelectTrigger className="w-full sm:w-[160px] h-10">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-white/[0.1]">
+                            <SelectContent>
                                 <SelectItem value="all">All Types</SelectItem>
-                                <SelectItem value="income">Income</SelectItem>
-                                <SelectItem value="expense">Expense</SelectItem>
-                                <SelectItem value="transfer">Transfer</SelectItem>
+                                <SelectItem value="income">
+                                    <span className="flex items-center gap-2">
+                                        <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                                        Income
+                                    </span>
+                                </SelectItem>
+                                <SelectItem value="expense">
+                                    <span className="flex items-center gap-2">
+                                        <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                                        Expense
+                                    </span>
+                                </SelectItem>
+                                <SelectItem value="transfer">
+                                    <span className="flex items-center gap-2">
+                                        <ArrowRightLeft className="h-3.5 w-3.5 text-blue-500" />
+                                        Transfer
+                                    </span>
+                                </SelectItem>
                             </SelectContent>
                         </Select>
+
+                        {/* Hide empty toggle */}
                         <Button
-                            variant="outline"
+                            variant={hideEmpty ? "secondary" : "outline"}
                             onClick={() => setHideEmpty(!hideEmpty)}
-                            className={cn(
-                                "border-white/[0.1] transition-colors",
-                                hideEmpty
-                                    ? "bg-violet-500/20 text-violet-300 hover:bg-violet-500/30"
-                                    : "text-slate-400 hover:bg-white/[0.05]"
-                            )}
+                            className="gap-2"
                         >
-                            {hideEmpty ? <Eye className="h-4 w-4 mr-2" /> : <EyeOff className="h-4 w-4 mr-2" />}
+                            {hideEmpty ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                             {hideEmpty ? 'Show Empty' : 'Hide Empty'}
                         </Button>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="border-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 backdrop-blur-xl">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-400">Income Categories</p>
-                                <p className="text-2xl font-bold text-white mt-1">{groupedCategories.income.length}</p>
+            {/* Categories Lists */}
+            <div className="space-y-8">
+                {/* Income Categories */}
+                {(filterType === 'all' || filterType === 'income') && groupedCategories.income.length > 0 && (
+                    <section>
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center">
+                                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                             </div>
-                            <TrendingUp className="h-8 w-8 text-green-500" />
+                            <h2 className="text-lg font-medium text-foreground">Income Categories</h2>
+                            <Badge variant="secondary" className="ml-2">{groupedCategories.income.length}</Badge>
                         </div>
-                    </CardContent>
-                </Card>
+                        <div className="space-y-3">
+                            {groupedCategories.income.map((category) => (
+                                <CategoryCard key={category.id} category={category} />
+                            ))}
+                        </div>
+                    </section>
+                )}
 
-                <Card className="border-0 bg-gradient-to-br from-red-500/10 to-rose-500/10 backdrop-blur-xl">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-400">Expense Categories</p>
-                                <p className="text-2xl font-bold text-white mt-1">{groupedCategories.expense.length}</p>
+                {/* Expense Categories */}
+                {(filterType === 'all' || filterType === 'expense') && groupedCategories.expense.length > 0 && (
+                    <section>
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/50 flex items-center justify-center">
+                                <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </div>
-                            <TrendingDown className="h-8 w-8 text-red-500" />
+                            <h2 className="text-lg font-medium text-foreground">Expense Categories</h2>
+                            <Badge variant="secondary" className="ml-2">{groupedCategories.expense.length}</Badge>
                         </div>
-                    </CardContent>
-                </Card>
+                        <div className="space-y-3">
+                            {groupedCategories.expense.map((category) => (
+                                <CategoryCard key={category.id} category={category} />
+                            ))}
+                        </div>
+                    </section>
+                )}
 
-                <Card className="border-0 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-xl">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-400">Transfer Categories</p>
-                                <p className="text-2xl font-bold text-white mt-1">{groupedCategories.transfer.length}</p>
+                {/* Transfer Categories */}
+                {(filterType === 'all' || filterType === 'transfer') && groupedCategories.transfer.length > 0 && (
+                    <section>
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center">
+                                <ArrowRightLeft className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <ArrowRightLeft className="h-8 w-8 text-blue-500" />
+                            <h2 className="text-lg font-medium text-foreground">Transfer Categories</h2>
+                            <Badge variant="secondary" className="ml-2">{groupedCategories.transfer.length}</Badge>
                         </div>
-                    </CardContent>
-                </Card>
+                        <div className="space-y-3">
+                            {groupedCategories.transfer.map((category) => (
+                                <CategoryCard key={category.id} category={category} />
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* Empty state */}
+                {filteredCategories.length === 0 && (
+                    <Card>
+                        <CardContent className="flex flex-col items-center justify-center py-16 px-6">
+                            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                                <Tag className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-lg font-medium text-foreground mb-1">
+                                No categories found
+                            </h3>
+                            <p className="text-sm text-muted-foreground text-center max-w-sm">
+                                {hideEmpty
+                                    ? 'No categories with transactions found. Click "Show Empty" to see all categories.'
+                                    : 'No categories match your current filters.'}
+                            </p>
+                            {hideEmpty && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-4"
+                                    onClick={() => setHideEmpty(false)}
+                                >
+                                    Show Empty Categories
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
             </div>
-
-            {/* Categories Grid */}
-            {(filterType === 'all' || filterType === 'income') && groupedCategories.income.length > 0 && (
-                <div>
-                    <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5 text-green-500" />
-                        Income Categories
-                    </h2>
-                    <div className="grid grid-cols-1 gap-4">
-                        {groupedCategories.income.map((category) => (
-                            <CategoryCard key={category.id} category={category} />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {(filterType === 'all' || filterType === 'expense') && groupedCategories.expense.length > 0 && (
-                <div>
-                    <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                        <TrendingDown className="h-5 w-5 text-red-500" />
-                        Expense Categories
-                    </h2>
-                    <div className="grid grid-cols-1 gap-4">
-                        {groupedCategories.expense.map((category) => (
-                            <CategoryCard key={category.id} category={category} />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {(filterType === 'all' || filterType === 'transfer') && groupedCategories.transfer.length > 0 && (
-                <div>
-                    <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                        <ArrowRightLeft className="h-5 w-5 text-blue-500" />
-                        Transfer Categories
-                    </h2>
-                    <div className="grid grid-cols-1 gap-4">
-                        {groupedCategories.transfer.map((category) => (
-                            <CategoryCard key={category.id} category={category} />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {filteredCategories.length === 0 && (
-                <Card className="border-0 bg-white/[0.03] backdrop-blur-xl">
-                    <CardContent className="p-12 text-center">
-                        <p className="text-slate-400">
-                            {hideEmpty
-                                ? 'No categories with transactions found. Click "Show Empty" to see all categories.'
-                                : 'No categories found'}
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
 
             {/* Move Transactions Dialog */}
             <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
-                <DialogContent className="bg-slate-900 border-white/[0.1] text-white">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Move Transactions</DialogTitle>
-                        <DialogDescription className="text-slate-400">
+                        <DialogDescription>
                             Move {selectedTransactions.size} selected transaction(s) to a different category
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="target-category">Target Category *</Label>
+                            <Label htmlFor="target-category">Target Category</Label>
                             <Select value={targetCategoryId} onValueChange={setTargetCategoryId}>
-                                <SelectTrigger className="bg-white/[0.05] border-white/[0.1] text-white">
+                                <SelectTrigger className="h-10">
                                     <SelectValue placeholder="Select a category" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-white/[0.1]">
-                                    {categories.map((cat) => (
-                                        <SelectItem key={cat.id} value={cat.id}>
-                                            {cat.name} ({cat.type})
-                                        </SelectItem>
-                                    ))}
+                                <SelectContent>
+                                    {categories.map((cat) => {
+                                        const CatIcon = (LucideIcons as any)[cat.icon] || Circle;
+                                        return (
+                                            <SelectItem key={cat.id} value={cat.id}>
+                                                <span className="flex items-center gap-2">
+                                                    <CatIcon className="h-4 w-4" style={{ color: cat.color }} />
+                                                    {cat.name}
+                                                    <span className="text-muted-foreground capitalize">({cat.type})</span>
+                                                </span>
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="gap-2 sm:gap-0">
                         <Button
                             variant="outline"
                             onClick={() => {
@@ -815,7 +963,6 @@ export default function CategoriesPage() {
                         </Button>
                         <Button
                             onClick={handleMoveTransactions}
-                            className="bg-violet-500 hover:bg-violet-600"
                             disabled={!targetCategoryId || movingTransactions}
                         >
                             {movingTransactions ? (
@@ -836,10 +983,10 @@ export default function CategoriesPage() {
 
             {/* Edit Category Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent className="bg-slate-900 border-white/[0.1] text-white">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Edit Category</DialogTitle>
-                        <DialogDescription className="text-slate-400">
+                        <DialogDescription>
                             {editingCategory?.is_system
                                 ? 'Customize the icon and color for this system category'
                                 : 'Update the category details'}
@@ -854,7 +1001,7 @@ export default function CategoriesPage() {
                                     id="edit-name"
                                     value={editForm.name}
                                     onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                                    className="bg-white/[0.05] border-white/[0.1] text-white"
+                                    className="h-10"
                                 />
                             </div>
                         )}
@@ -876,11 +1023,11 @@ export default function CategoriesPage() {
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="gap-2 sm:gap-0">
                         <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleEditSubmit} className="bg-violet-500 hover:bg-violet-600">
+                        <Button onClick={handleEditSubmit}>
                             Save Changes
                         </Button>
                     </DialogFooter>
@@ -889,39 +1036,54 @@ export default function CategoriesPage() {
 
             {/* New Category Dialog */}
             <Dialog open={newDialogOpen} onOpenChange={setNewDialogOpen}>
-                <DialogContent className="bg-slate-900 border-white/[0.1] text-white">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Create New Category</DialogTitle>
-                        <DialogDescription className="text-slate-400">
+                        <DialogDescription>
                             Add a custom category for your transactions
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="new-name">Name *</Label>
+                            <Label htmlFor="new-name">Name</Label>
                             <Input
                                 id="new-name"
                                 placeholder="e.g., Coffee Shops"
                                 value={newForm.name}
                                 onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
-                                className="bg-white/[0.05] border-white/[0.1] text-white placeholder:text-slate-500"
+                                className="h-10"
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="new-type">Type *</Label>
+                            <Label htmlFor="new-type">Type</Label>
                             <Select
                                 value={newForm.type}
                                 onValueChange={(value: any) => setNewForm({ ...newForm, type: value })}
                             >
-                                <SelectTrigger className="bg-white/[0.05] border-white/[0.1] text-white">
+                                <SelectTrigger className="h-10">
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-white/[0.1]">
-                                    <SelectItem value="income">Income</SelectItem>
-                                    <SelectItem value="expense">Expense</SelectItem>
-                                    <SelectItem value="transfer">Transfer</SelectItem>
+                                <SelectContent>
+                                    <SelectItem value="income">
+                                        <span className="flex items-center gap-2">
+                                            <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                                            Income
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="expense">
+                                        <span className="flex items-center gap-2">
+                                            <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                                            Expense
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="transfer">
+                                        <span className="flex items-center gap-2">
+                                            <ArrowRightLeft className="h-3.5 w-3.5 text-blue-500" />
+                                            Transfer
+                                        </span>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -943,11 +1105,11 @@ export default function CategoriesPage() {
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="gap-2 sm:gap-0">
                         <Button variant="outline" onClick={() => setNewDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleCreateCategory} className="bg-violet-500 hover:bg-violet-600">
+                        <Button onClick={handleCreateCategory}>
                             Create Category
                         </Button>
                     </DialogFooter>
@@ -956,21 +1118,19 @@ export default function CategoriesPage() {
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <AlertDialogContent className="bg-slate-900 border-white/[0.1] text-white">
+                <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Category</AlertDialogTitle>
-                        <AlertDialogDescription className="text-slate-400">
-                            Are you sure you want to delete <strong className="text-white">{categoryToDelete?.name}</strong>?
+                        <AlertDialogDescription>
+                            Are you sure you want to delete <strong>{categoryToDelete?.name}</strong>?
                             This action cannot be undone. You can only delete categories that have no transactions.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel className="bg-white/[0.05] border-white/[0.1] text-white hover:bg-white/[0.1]">
-                            Cancel
-                        </AlertDialogCancel>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteCategory}
-                            className="bg-red-500 hover:bg-red-600"
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             Delete
                         </AlertDialogAction>

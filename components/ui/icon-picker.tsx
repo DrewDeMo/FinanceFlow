@@ -110,7 +110,7 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                     role="combobox"
                     aria-expanded={open}
                     disabled={disabled}
-                    className="w-full justify-between bg-white/[0.05] border-white/[0.1] text-white hover:bg-white/[0.1] hover:text-white"
+                    className="w-full justify-between h-10"
                 >
                     <div className="flex items-center gap-2">
                         <SelectedIconComponent className="h-4 w-4" />
@@ -121,13 +121,13 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                     <LucideIcons.ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0 bg-slate-900 border-white/[0.1]" align="start">
-                <div className="p-3 border-b border-white/[0.1]">
+            <PopoverContent className="w-[400px] p-0" align="start">
+                <div className="p-3 border-b border-border">
                     <Input
                         placeholder="Search icons..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="bg-white/[0.05] border-white/[0.1] text-white placeholder:text-slate-500"
+                        className="h-9"
                     />
                 </div>
                 <ScrollArea className="h-[300px]">
@@ -142,8 +142,8 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                                     variant="ghost"
                                     size="sm"
                                     className={cn(
-                                        'h-10 w-10 p-0 hover:bg-white/[0.1]',
-                                        isSelected && 'bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/50'
+                                        'h-10 w-10 p-0',
+                                        isSelected && 'bg-primary/10 border border-primary/50'
                                     )}
                                     onClick={() => {
                                         onValueChange(iconName);
@@ -154,14 +154,14 @@ export function IconPicker({ value, onValueChange, disabled }: IconPickerProps) 
                                 >
                                     <IconComponent className={cn(
                                         'h-4 w-4',
-                                        isSelected ? 'text-violet-400' : 'text-slate-400'
+                                        isSelected ? 'text-primary' : 'text-muted-foreground'
                                     )} />
                                 </Button>
                             );
                         })}
                     </div>
                     {filteredIcons.length === 0 && (
-                        <div className="p-8 text-center text-slate-500">
+                        <div className="p-8 text-center text-muted-foreground">
                             <LucideIcons.Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                             <p>No icons found</p>
                         </div>

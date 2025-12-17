@@ -34,7 +34,7 @@ export function CSVMappingForm({
 }: CSVMappingFormProps) {
   const { user } = useAuth();
   const [mapping, setMapping] = useState<ColumnMapping>(detectedMapping);
-  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; type: string }>>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
 
   useEffect(() => {
@@ -46,12 +46,23 @@ export function CSVMappingForm({
 
     const { data } = await supabase
       .from('accounts')
-      .select('id, name')
+      .select('id, name, type')
       .eq('user_id', user.id)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('type', { ascending: true });
 
     if (data) {
       setAccounts(data);
+      // Set default to first checking account
+      const checkingAccount = data.find(acc => acc.type === 'checking');
+      if (checkingAccount) {
+        setSelectedAccount(checkingAccount.id);
+        onAccountChange(checkingAccount.id);
+      } else if (data.length > 0) {
+        // Fallback to first account if no checking account exists
+        setSelectedAccount(data[0].id);
+        onAccountChange(data[0].id);
+      }
     }
   };
 
@@ -62,9 +73,8 @@ export function CSVMappingForm({
   };
 
   const handleAccountChange = (accountId: string) => {
-    const actualAccountId = accountId === 'none' ? '' : accountId;
-    setSelectedAccount(actualAccountId);
-    onAccountChange(actualAccountId);
+    setSelectedAccount(accountId);
+    onAccountChange(accountId);
   };
 
   const isValid = mapping.posted_date && mapping.description && mapping.amount;
@@ -86,15 +96,14 @@ export function CSVMappingForm({
             <p className="text-sm text-slate-600 mb-2">
               Select which account these transactions are from
             </p>
-            <Select value={selectedAccount || 'none'} onValueChange={handleAccountChange}>
+            <Select value={selectedAccount} onValueChange={handleAccountChange}>
               <SelectTrigger id="account" className="max-w-md">
                 <SelectValue placeholder="Select account" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
-                    {account.name}
+                    {account.name} ({account.type})
                   </SelectItem>
                 ))}
               </SelectContent>

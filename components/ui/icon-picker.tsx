@@ -60,7 +60,6 @@ export const CATEGORY_ICONS = [
     'Package',
     'Tag',
     'Star',
-    'Heart',
     'Users',
     'User',
     'Baby',
@@ -76,6 +75,19 @@ export const CATEGORY_ICONS = [
     'Square',
     'Triangle',
     'Hexagon',
+    // Healthcare & Medical
+    'Pill',
+    'Eye',
+    'Hospital',
+    // Food & Dining
+    'Beef',
+    'Wine',
+    // Pets & Animals
+    'Bone',
+    'PawPrint',
+    // Housing & Home
+    'PaintRoller',
+    'Armchair',
 ];
 
 interface IconPickerProps {

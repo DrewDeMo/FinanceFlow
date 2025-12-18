@@ -3,99 +3,88 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { RefreshCw, CheckCircle, X, FileText, Calendar, TrendingUp, AlertCircle, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { RefreshCw, AlertTriangle, CheckCircle, XCircle, DollarSign, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
-interface RecurringSeries {
-  id: string;
+interface Subscription {
   merchant_key: string;
   merchant_name: string;
-  cadence: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual';
+  first_charge_date: string;
+  last_charge_date: string;
+  total_charges: number;
   average_amount: number;
-  last_amount: number;
-  amount_variance: number;
-  confidence: 'high' | 'medium' | 'low';
-  status: 'active' | 'paused' | 'cancelled' | 'pending_confirmation';
-  occurrence_count: number;
-  last_occurrence_date: string;
-  next_expected_date: string;
-  is_variable: boolean;
-  is_subscription?: boolean;
-  subscription_confidence?: number;
-  source?: 'detected' | 'categorized';
-  has_bill?: boolean;
-}
-
-interface CategorizedSubscription {
-  merchant_key: string;
-  merchant_name: string;
-  transaction_count: number;
-  average_amount: number;
-  last_transaction_date: string;
   total_spent: number;
-  first_transaction_date?: string;
-  months_active?: number;
+  status: 'active' | 'cancelled' | 'potentially_inactive';
+  user_marked_status?: 'active' | 'cancelled';
+  cancelled_date?: string;
+  days_since_last_charge: number;
+  is_ongoing: boolean;
+  notes?: string;
 }
 
 export default function RecurringPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [recurringSeries, setRecurringSeries] = useState<RecurringSeries[]>([]);
-  const [categorizedSubscriptions, setCategorizedSubscriptions] = useState<CategorizedSubscription[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  const [detecting, setDetecting] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [editingNotes, setEditingNotes] = useState<string | null>(null);
+  const [notesValue, setNotesValue] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
     if (user) {
-      loadRecurringSeries();
-      loadCategorizedSubscriptions();
+      loadSubscriptions();
     }
   }, [user]);
 
-  const loadRecurringSeries = async () => {
-    if (!user) return;
-
+  const loadSubscriptions = async () => {
     try {
-      // Get all recurring series
-      const { data, error } = await supabase
-        .from('recurring_series')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('confidence', { ascending: false })
-        .order('average_amount', { ascending: false });
+      setLoading(true);
 
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session');
+      }
 
-      // Get all bills to check which recurring series have been converted to bills
-      const { data: billsData } = await supabase
-        .from('bills')
-        .select('recurring_series_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
+      const response = await fetch('/api/subscriptions', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
 
-      const billSeriesIds = new Set(
-        (billsData || [])
-          .map(b => b.recurring_series_id)
-          .filter(id => id !== null)
-      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch subscriptions');
+      }
 
-      // Filter out recurring series that have been converted to bills
-      const filteredData = (data || [])
-        .filter(series => !billSeriesIds.has(series.id))
-        .map(s => ({ ...s, source: 'detected' as const, has_bill: false }));
-
-      setRecurringSeries(filteredData);
+      const data = await response.json();
+      setSubscriptions(data.subscriptions || []);
     } catch (error) {
-      console.error('Error loading recurring series:', error);
+      console.error('Error loading subscriptions:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load recurring charges',
+        description: 'Failed to load subscriptions',
         variant: 'destructive',
       });
     } finally {
@@ -103,297 +92,114 @@ export default function RecurringPage() {
     }
   };
 
-  const loadCategorizedSubscriptions = async () => {
-    if (!user) return;
-
+  const updateSubscriptionStatus = async (
+    merchantKey: string,
+    status: 'active' | 'cancelled'
+  ) => {
     try {
-      // Get the Subscriptions category
-      const { data: categories } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('name', 'Subscriptions')
-        .or(`user_id.eq.${user.id},is_system.eq.true`)
-        .limit(1)
-        .single();
+      setUpdatingStatus(merchantKey);
 
-      if (!categories) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session');
+      }
 
-      // Get all transactions categorized as Subscriptions
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select('merchant_key, description, amount, posted_date')
-        .eq('user_id', user.id)
-        .eq('category_id', categories.id)
-        .order('posted_date', { ascending: true }); // Oldest first to get first transaction
-
-      if (error) throw error;
-
-      // Group by merchant_key and calculate stats
-      const merchantMap = new Map<string, {
-        merchant_key: string;
-        merchant_name: string;
-        transactions: any[];
-        total: number;
-      }>();
-
-      transactions?.forEach(tx => {
-        const key = tx.merchant_key;
-        if (!merchantMap.has(key)) {
-          merchantMap.set(key, {
-            merchant_key: key,
-            merchant_name: tx.description,
-            transactions: [],
-            total: 0,
-          });
-        }
-        const merchant = merchantMap.get(key)!;
-        merchant.transactions.push(tx);
-        merchant.total += parseFloat(tx.amount.toString());
-      });
-
-      // Convert to CategorizedSubscription format with enhanced info
-      const subscriptions: CategorizedSubscription[] = Array.from(merchantMap.values()).map(m => {
-        const firstDate = new Date(m.transactions[0].posted_date);
-        const lastDate = new Date(m.transactions[m.transactions.length - 1].posted_date);
-        const monthsDiff = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 +
-          (lastDate.getMonth() - firstDate.getMonth()) + 1;
-
-        return {
-          merchant_key: m.merchant_key,
-          merchant_name: m.merchant_name,
-          transaction_count: m.transactions.length,
-          average_amount: m.total / m.transactions.length,
-          last_transaction_date: m.transactions[m.transactions.length - 1].posted_date,
-          first_transaction_date: m.transactions[0].posted_date,
-          total_spent: m.total,
-          months_active: monthsDiff,
-        };
-      });
-
-      setCategorizedSubscriptions(subscriptions);
-    } catch (error) {
-      console.error('Error loading categorized subscriptions:', error);
-    }
-  };
-
-  const detectRecurring = async () => {
-    if (!user) return;
-
-    setDetecting(true);
-    try {
-      const response = await fetch('/api/recurring/detect', {
+      const response = await fetch('/api/subscriptions/status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          merchant_key: merchantKey,
+          status,
+        }),
       });
 
-      if (!response.ok) throw new Error('Detection failed');
+      if (!response.ok) {
+        throw new Error('Failed to update subscription status');
+      }
 
-      const result = await response.json();
       toast({
         title: 'Success',
-        description: `Detected ${result.detected} recurring charges (${result.inserted} new, ${result.updated} updated)`,
+        description: `Subscription marked as ${status}`,
       });
 
-      await loadRecurringSeries();
-      await loadCategorizedSubscriptions();
+      await loadSubscriptions();
     } catch (error) {
-      console.error('Error detecting recurring charges:', error);
+      console.error('Error updating subscription:', error);
       toast({
         title: 'Error',
-        description: 'Failed to detect recurring charges',
+        description: 'Failed to update subscription status',
         variant: 'destructive',
       });
     } finally {
-      setDetecting(false);
+      setUpdatingStatus(null);
+      setCancelDialogOpen(false);
+      setSelectedSubscription(null);
     }
   };
 
-  const clearAll = async () => {
-    if (!user) return;
-
-    try {
-      await supabase
-        .from('bills')
-        .delete()
-        .eq('user_id', user.id);
-
-      await supabase
-        .from('recurring_series')
-        .delete()
-        .eq('user_id', user.id);
-
-      toast({
-        title: 'Success',
-        description: 'All recurring charges and bills cleared',
-      });
-
-      await loadRecurringSeries();
-      await loadCategorizedSubscriptions();
-    } catch (error) {
-      console.error('Error clearing data:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to clear data',
-        variant: 'destructive',
-      });
-    }
+  const handleCancelClick = (subscription: Subscription) => {
+    setSelectedSubscription(subscription);
+    setCancelDialogOpen(true);
   };
 
-  const confirmAllPending = async () => {
-    if (!user) return;
+  const handleEditNotes = (subscription: Subscription) => {
+    setEditingNotes(subscription.merchant_key);
+    setNotesValue(subscription.notes || '');
+  };
 
+  const handleSaveNotes = async (merchantKey: string) => {
     try {
-      const pending = recurringSeries.filter(s => s.status === 'pending_confirmation');
+      setSavingNotes(true);
 
-      for (const series of pending) {
-        await (supabase
-          .from('recurring_series')
-          .update as any)({ status: 'active' })
-          .eq('id', series.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session');
+      }
+
+      const subscription = subscriptions.find(s => s.merchant_key === merchantKey);
+      const response = await fetch('/api/subscriptions/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          merchant_key: merchantKey,
+          status: subscription?.user_marked_status || 'active',
+          notes: notesValue.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save notes');
       }
 
       toast({
         title: 'Success',
-        description: `Confirmed ${pending.length} recurring charges`,
+        description: 'Notes saved successfully',
       });
 
-      await loadRecurringSeries();
-      await loadCategorizedSubscriptions();
+      await loadSubscriptions();
+      setEditingNotes(null);
+      setNotesValue('');
     } catch (error) {
-      console.error('Error confirming charges:', error);
+      console.error('Error saving notes:', error);
       toast({
         title: 'Error',
-        description: 'Failed to confirm charges',
+        description: 'Failed to save notes',
         variant: 'destructive',
       });
+    } finally {
+      setSavingNotes(false);
     }
   };
 
-  const updateStatus = async (id: string, status: RecurringSeries['status']) => {
-    try {
-      await (supabase
-        .from('recurring_series')
-        .update as any)({ status })
-        .eq('id', id);
-
-      toast({
-        title: 'Success',
-        description: `Recurring charge ${status === 'active' ? 'confirmed' : 'dismissed'}`,
-      });
-
-      await loadRecurringSeries();
-      await loadCategorizedSubscriptions();
-    } catch (error) {
-      console.error('Error updating status:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update recurring charge',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const confirmAsSubscription = async (series: RecurringSeries) => {
-    try {
-      // Get the Subscriptions category
-      const { data: categories } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('name', 'Subscriptions')
-        .or(`user_id.eq.${user!.id},is_system.eq.true`)
-        .limit(1)
-        .single();
-
-      if (!categories) {
-        toast({
-          title: 'Error',
-          description: 'Subscriptions category not found',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const subscriptionCategoryId = categories.id;
-
-      // Update all transactions with this merchant_key to Subscriptions category
-      const { error: transactionsError } = await supabase
-        .from('transactions')
-        .update({
-          category_id: subscriptionCategoryId,
-          classification_source: 'manual',
-          classification_confidence: 1.0,
-        })
-        .eq('user_id', user!.id)
-        .eq('merchant_key', series.merchant_key);
-
-      if (transactionsError) throw transactionsError;
-
-      // Update recurring series status to active
-      await (supabase
-        .from('recurring_series')
-        .update as any)({ status: 'active' })
-        .eq('id', series.id);
-
-      toast({
-        title: 'Success',
-        description: `${series.merchant_name} confirmed as subscription and all transactions categorized`,
-      });
-
-      await loadRecurringSeries();
-      await loadCategorizedSubscriptions();
-    } catch (error) {
-      console.error('Error confirming subscription:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to confirm subscription',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const createBill = async (series: RecurringSeries) => {
-    try {
-      const nextDueDate = new Date(series.next_expected_date);
-      const dueDay = nextDueDate.getDate();
-
-      await (supabase
-        .from('bills')
-        .insert as any)({
-          user_id: user!.id,
-          recurring_series_id: series.id,
-          name: series.merchant_name,
-          typical_amount: series.average_amount,
-          amount_range_min: series.average_amount * 0.9,
-          amount_range_max: series.average_amount * 1.1,
-          due_day: dueDay,
-          grace_days: 3,
-          autopay: false,
-          status: 'upcoming',
-          next_due_date: series.next_expected_date,
-          is_active: true,
-        });
-
-      await (supabase
-        .from('recurring_series')
-        .update as any)({ status: 'active' })
-        .eq('id', series.id);
-
-      toast({
-        title: 'Success',
-        description: `Bill created for ${series.merchant_name}`,
-      });
-
-      await loadRecurringSeries();
-      await loadCategorizedSubscriptions();
-    } catch (error) {
-      console.error('Error creating bill:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create bill',
-        variant: 'destructive',
-      });
-    }
+  const handleCancelEdit = () => {
+    setEditingNotes(null);
+    setNotesValue('');
   };
 
   const formatCurrency = (amount: number) => {
@@ -403,545 +209,385 @@ export default function RecurringPage() {
     }).format(amount);
   };
 
-  const getCadenceLabel = (cadence: string) => {
-    const labels = {
-      weekly: 'Weekly',
-      biweekly: 'Bi-weekly',
-      monthly: 'Monthly',
-      quarterly: 'Quarterly',
-      annual: 'Annual',
-    };
-    return labels[cadence as keyof typeof labels] || cadence;
-  };
-
-  const calculateMonthlyEquivalent = (amount: number, cadence: string) => {
-    const multipliers = {
-      weekly: 4.33,
-      biweekly: 2.17,
-      monthly: 1,
-      quarterly: 0.33,
-      annual: 0.083,
-    };
-    return amount * (multipliers[cadence as keyof typeof multipliers] || 1);
-  };
-
   const getStats = () => {
-    const allActiveCharges = [...recurringSeries.filter(s => s.status === 'active'), ...activeCharges];
+    const active = subscriptions.filter((s) => s.status === 'active');
+    const cancelled = subscriptions.filter((s) => s.status === 'cancelled');
+    const potentiallyInactive = subscriptions.filter(
+      (s) => s.status === 'potentially_inactive'
+    );
 
-    const totalMonthly = allActiveCharges.reduce((sum, series) => {
-      return sum + calculateMonthlyEquivalent(series.average_amount, series.cadence);
-    }, 0);
-
-    const totalAnnual = totalMonthly * 12;
-
-    const subscriptionCount = allActiveCharges.filter(s => s.is_subscription).length;
-    const otherRecurringCount = allActiveCharges.length - subscriptionCount;
-
-    const categorizedTotal = categorizedSubscriptions.reduce((sum, sub) => sum + sub.average_amount, 0);
+    // Calculate monthly total (average of active subscriptions)
+    const monthlyTotal = active.reduce((sum, sub) => sum + sub.average_amount, 0);
 
     return {
-      totalActive: allActiveCharges.length + categorizedSubscriptions.length,
-      totalMonthly: totalMonthly + categorizedTotal,
-      totalAnnual: (totalMonthly + categorizedTotal) * 12,
-      subscriptionCount: subscriptionCount + categorizedSubscriptions.length,
-      otherRecurringCount,
-      pendingCount: pendingCharges.length,
+      activeCount: active.length,
+      cancelledCount: cancelled.length,
+      potentiallyInactiveCount: potentiallyInactive.length,
+      monthlyTotal,
     };
   };
 
-  const getConfidenceBadge = (confidence: string) => {
-    const variants = {
-      high: 'default',
-      medium: 'secondary',
-      low: 'outline',
-    };
-    return (
-      <Badge variant={variants[confidence as keyof typeof variants] as any}>
-        {confidence.toUpperCase()}
-      </Badge>
-    );
+  const getStatusBadge = (subscription: Subscription) => {
+    if (subscription.status === 'active') {
+      return (
+        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-900/50">
+          <CheckCircle className="h-3 w-3 mr-1" />
+          Active
+        </Badge>
+      );
+    } else if (subscription.status === 'cancelled') {
+      return (
+        <Badge className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-900/50">
+          <XCircle className="h-3 w-3 mr-1" />
+          Cancelled
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-900/50">
+          <AlertTriangle className="h-3 w-3 mr-1" />
+          Potentially Inactive
+        </Badge>
+      );
+    }
   };
 
   if (loading) {
     return (
-      <div className="p-8 space-y-8 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Recurring Charges</h1>
-            <p className="text-slate-400">Loading your recurring charges...</p>
-          </div>
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-5 w-96" />
         </div>
-        <div className="space-y-6">
-          <Skeleton className="h-32 bg-white/[0.05] rounded-2xl animate-pulse" />
-          <Skeleton className="h-96 bg-white/[0.05] rounded-2xl animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    );
+  }
+
+  const stats = getStats();
+
+  // Empty state
+  if (subscriptions.length === 0) {
+    return (
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+            Subscriptions
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Track and manage your recurring subscriptions
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center justify-center py-20 px-6">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+            <RefreshCw className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground mb-2 text-center">
+            No subscriptions found
+          </h2>
+          <p className="text-muted-foreground text-center max-w-md">
+            Categorize transactions as "Subscriptions" to track them here. Any transaction
+            marked with the Subscriptions category will appear on this page.
+          </p>
         </div>
       </div>
     );
   }
 
-  const pendingCharges = recurringSeries.filter(s => s.status === 'pending_confirmation');
-  const activeCharges = recurringSeries.filter(s => s.status === 'active');
-  const subscriptions = pendingCharges.filter(s => s.is_subscription);
-  const otherRecurring = pendingCharges.filter(s => !s.is_subscription);
-
-  // Merge categorized subscriptions with detected ones, avoiding duplicates
-  const detectedMerchantKeys = new Set(recurringSeries.map(s => s.merchant_key));
-  const uniqueCategorizedSubscriptions = categorizedSubscriptions.filter(
-    cs => !detectedMerchantKeys.has(cs.merchant_key)
-  );
-
-  const stats = getStats();
-
   return (
-    <div className="p-8 space-y-8 animate-fade-in">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl blur-xl opacity-50" />
-              <div className="relative p-2 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl">
-                <RefreshCw className="h-5 w-5 text-white" strokeWidth={2.5} />
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold text-white">Recurring Charges</h1>
-          </div>
-          <p className="text-slate-400">Manage subscriptions and recurring charges - bills are tracked separately in the Bills page</p>
-        </div>
-        <div className="flex gap-2">
-          {recurringSeries.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-white/[0.05] hover:bg-white/[0.1] text-white border-white/[0.1] backdrop-blur-xl transition-all duration-300"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear All
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="bg-slate-900 border-white/[0.1] text-white">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-white">Clear All Recurring Charges?</AlertDialogTitle>
-                  <AlertDialogDescription className="text-slate-400">
-                    This will delete all recurring charges and bills. Your transactions will not be affected.
-                    You can re-run detection afterward to find patterns again.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.1] text-white">Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={clearAll} className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white border-0">
-                    Clear All
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          <Button
-            onClick={detectRecurring}
-            disabled={detecting}
-            className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white border-0 shadow-lg transition-all duration-300 hover:scale-105"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${detecting ? 'animate-spin' : ''}`} />
-            {detecting ? 'Detecting...' : 'Detect Patterns'}
-          </Button>
-        </div>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+          Subscriptions
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Track and manage your recurring subscriptions
+        </p>
       </div>
 
-      {/* Summary Stats */}
-      {(stats.totalActive > 0 || stats.pendingCount > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent" />
-            <CardHeader className="relative pb-2">
-              <CardDescription className="text-slate-400">Active Subscriptions</CardDescription>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-3xl font-bold text-white">{stats.totalActive}</div>
-              <p className="text-xs text-slate-400 mt-1">
-                {stats.subscriptionCount} subscriptions, {stats.otherRecurringCount} other
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/10 to-transparent" />
-            <CardHeader className="relative pb-2">
-              <CardDescription className="text-slate-400">Monthly Total</CardDescription>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalMonthly)}</div>
-              <p className="text-xs text-slate-400 mt-1">Est. recurring charges/month</p>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
-            <CardHeader className="relative pb-2">
-              <CardDescription className="text-slate-400">Annual Total</CardDescription>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalAnnual)}</div>
-              <p className="text-xs text-slate-400 mt-1">Est. yearly spending</p>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-            <CardHeader className="relative pb-2">
-              <CardDescription className="text-slate-400">Pending Review</CardDescription>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-3xl font-bold text-white">{stats.pendingCount}</div>
-              <p className="text-xs text-slate-400 mt-1">Awaiting confirmation</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {subscriptions.length > 0 && (
-        <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 via-transparent to-fuchsia-500/10" />
-          <CardHeader className="relative">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <div className="p-2 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl">
-                    <RefreshCw className="h-4 w-4 text-white" />
-                  </div>
-                  Detected Subscriptions ({subscriptions.length})
-                </CardTitle>
-                <CardDescription className="text-slate-400 mt-1">
-                  High-confidence subscription services detected by AI
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="relative">
-            <div className="space-y-4">
-              {subscriptions.map((series) => (
-                <Card key={series.id} className="border-0 bg-white/[0.05] backdrop-blur-xl hover:bg-white/[0.08] transition-all duration-300">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <h3 className="text-lg font-semibold text-white">
-                            {series.merchant_name}
-                          </h3>
-                          <Badge className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white border-0">
-                            {series.subscription_confidence}% Match
-                          </Badge>
-                          <Badge variant="outline" className="border-white/[0.2] text-white bg-white/[0.05]">
-                            {series.confidence.toUpperCase()}
-                          </Badge>
-                          {series.is_variable && (
-                            <Badge variant="outline" className="border-orange-400/40 text-orange-400 bg-orange-500/10">
-                              Variable Amount
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
-                          <div>
-                            <p className="text-slate-400">Average Amount</p>
-                            <p className="font-semibold text-white">{formatCurrency(series.average_amount)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Frequency</p>
-                            <p className="font-semibold text-white">{getCadenceLabel(series.cadence)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Occurrences</p>
-                            <p className="font-semibold text-white">{series.occurrence_count}x</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Next Expected</p>
-                            <p className="font-semibold text-white">
-                              {format(new Date(series.next_expected_date), 'MMM dd, yyyy')}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2 ml-4">
-                        <Button
-                          size="sm"
-                          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white border-0 shadow-lg"
-                          onClick={() => confirmAsSubscription(series)}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Confirm Subscription
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.1] text-white"
-                          onClick={() => updateStatus(series.id, 'active')}
-                        >
-                          Confirm as Recurring
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-slate-400 hover:text-white hover:bg-white/[0.05]"
-                          onClick={() => updateStatus(series.id, 'cancelled')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {otherRecurring.length > 0 && (
-        <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent" />
-          <CardHeader className="relative">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl">
-                    <AlertCircle className="h-4 w-4 text-white" />
-                  </div>
-                  Other Recurring Charges ({otherRecurring.length})
-                </CardTitle>
-                <CardDescription className="text-slate-400 mt-1">
-                  Review these detected patterns and confirm if they are recurring charges
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="relative">
-            <div className="space-y-4">
-              {otherRecurring.map((series) => (
-                <Card key={series.id} className="border-0 bg-white/[0.05] backdrop-blur-xl hover:bg-white/[0.08] transition-all duration-300">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <h3 className="text-lg font-semibold text-white">
-                            {series.merchant_name}
-                          </h3>
-                          <Badge variant="outline" className="border-white/[0.2] text-white bg-white/[0.05]">
-                            {series.confidence.toUpperCase()}
-                          </Badge>
-                          {series.is_variable && (
-                            <Badge variant="outline" className="border-orange-400/40 text-orange-400 bg-orange-500/10">
-                              Variable Amount
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
-                          <div>
-                            <p className="text-slate-400">Average Amount</p>
-                            <p className="font-semibold text-white">{formatCurrency(series.average_amount)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Frequency</p>
-                            <p className="font-semibold text-white">{getCadenceLabel(series.cadence)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Occurrences</p>
-                            <p className="font-semibold text-white">{series.occurrence_count}x</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Next Expected</p>
-                            <p className="font-semibold text-white">
-                              {format(new Date(series.next_expected_date), 'MMM dd, yyyy')}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 ml-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.1] text-white"
-                          onClick={() => updateStatus(series.id, 'active')}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Confirm
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.1] text-white"
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Make Bill
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="bg-slate-900 border-white/[0.1] text-white">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-white">Create Bill</AlertDialogTitle>
-                              <AlertDialogDescription className="text-slate-400">
-                                This will create a bill for {series.merchant_name} with automatic payment tracking.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.1] text-white">Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => createBill(series)}
-                                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white border-0"
-                              >
-                                Create Bill
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-slate-400 hover:text-white hover:bg-white/[0.05]"
-                          onClick={() => updateStatus(series.id, 'cancelled')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {uniqueCategorizedSubscriptions.length > 0 && (
-        <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-pink-500/10" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2 text-white">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl">
-                <RefreshCw className="h-4 w-4 text-white" />
-              </div>
-              Categorized Subscriptions ({uniqueCategorizedSubscriptions.length})
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Active Subscriptions */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Active Subscriptions
             </CardTitle>
-            <CardDescription className="text-slate-400 mt-1">
-              Transactions you've manually categorized as subscriptions
-            </CardDescription>
           </CardHeader>
-          <CardContent className="relative">
-            <div className="space-y-4">
-              {uniqueCategorizedSubscriptions.map((sub) => (
-                <Card key={sub.merchant_key} className="border-0 bg-white/[0.05] backdrop-blur-xl hover:bg-white/[0.08] transition-all duration-300">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <h3 className="text-lg font-semibold text-white">{sub.merchant_name}</h3>
-                          <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0">
-                            Subscription
-                          </Badge>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-slate-400">Average Payment</p>
-                            <p className="font-semibold text-white">{formatCurrency(sub.average_amount)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Total Spent</p>
-                            <p className="font-semibold text-white">{formatCurrency(sub.total_spent)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Active Since</p>
-                            <p className="font-semibold text-white">
-                              {sub.first_transaction_date ? format(new Date(sub.first_transaction_date), 'MMM yyyy') : 'N/A'}
-                              {sub.months_active && sub.months_active > 1 ? ` (${sub.months_active} months)` : ''}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">Last Payment</p>
-                            <p className="font-semibold text-white">
-                              {format(new Date(sub.last_transaction_date), 'MMM dd, yyyy')}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-3 text-sm text-slate-400">
-                          {sub.transaction_count} payment{sub.transaction_count !== 1 ? 's' : ''} recorded
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+          <CardContent>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold text-emerald-600 dark:text-emerald-400">
+                {stats.activeCount}
+              </span>
+              <span className="text-sm text-muted-foreground">ongoing</span>
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {activeCharges.length > 0 && (
-        <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2 text-white">
-              <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl">
-                <TrendingUp className="h-4 w-4 text-white" />
-              </div>
-              Active Recurring Charges ({activeCharges.length})
+        {/* Monthly Total */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Est. Monthly Total
             </CardTitle>
-            <CardDescription className="text-slate-400 mt-1">
-              Confirmed recurring charges being tracked
-            </CardDescription>
           </CardHeader>
-          <CardContent className="relative">
-            <div className="space-y-4">
-              {activeCharges.map((series) => (
-                <Card key={series.id} className="border-0 bg-white/[0.05] backdrop-blur-xl hover:bg-white/[0.08] transition-all duration-300">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
+          <CardContent>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold text-foreground">
+                {formatCurrency(stats.monthlyTotal)}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Based on active subscriptions
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Cancelled */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Cancelled
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold text-red-600 dark:text-red-400">
+                {stats.cancelledCount}
+              </span>
+              <span className="text-sm text-muted-foreground">marked</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Potentially Inactive */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Needs Review
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold text-amber-600 dark:text-amber-400">
+                {stats.potentiallyInactiveCount}
+              </span>
+              <span className="text-sm text-muted-foreground">to check</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Subscriptions List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-medium">All Subscriptions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {subscriptions.map((subscription) => (
+              <div
+                key={subscription.merchant_key}
+                className={cn(
+                  'p-4 rounded-xl border transition-all',
+                  subscription.status === 'cancelled'
+                    ? 'bg-muted/50 border-border/50 opacity-75'
+                    : 'bg-card border-border hover:border-border/80'
+                )}
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-lg font-semibold text-foreground truncate">
+                        {subscription.merchant_name}
+                      </h3>
+                      {getStatusBadge(subscription)}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <h3 className="font-semibold text-white">{series.merchant_name}</h3>
-                        <p className="text-sm text-slate-400 mt-1">
-                          {formatCurrency(series.average_amount)} · {getCadenceLabel(series.cadence)} ·
-                          Next: {format(new Date(series.next_expected_date), 'MMM dd')}
+                        <p className="text-muted-foreground">Average Amount</p>
+                        <p className="font-semibold text-foreground">
+                          {formatCurrency(subscription.average_amount)}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-muted-foreground">Total Spent</p>
+                        <p className="font-semibold text-foreground">
+                          {formatCurrency(subscription.total_spent)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">First Charge</p>
+                        <p className="font-semibold text-foreground">
+                          {format(new Date(subscription.first_charge_date), 'MMM d, yyyy')}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Last Charge</p>
+                        <p className="font-semibold text-foreground">
+                          {format(new Date(subscription.last_charge_date), 'MMM d, yyyy')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{subscription.total_charges} charges</span>
+                      <span>•</span>
+                      <span>
+                        {subscription.days_since_last_charge === 0
+                          ? 'Today'
+                          : `${subscription.days_since_last_charge} days ago`}
+                      </span>
+                    </div>
+
+                    {/* Notes section */}
+                    {editingNotes === subscription.merchant_key ? (
+                      <div className="mt-3 space-y-2">
+                        <Label htmlFor={`notes-${subscription.merchant_key}`} className="text-xs">
+                          Notes (what is this subscription for?)
+                        </Label>
+                        <Textarea
+                          id={`notes-${subscription.merchant_key}`}
+                          value={notesValue}
+                          onChange={(e) => setNotesValue(e.target.value)}
+                          placeholder="e.g., Music streaming service, Cloud storage, etc."
+                          className="min-h-[60px] text-sm"
+                          disabled={savingNotes}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveNotes(subscription.merchant_key)}
+                            disabled={savingNotes}
+                          >
+                            {savingNotes ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEdit}
+                            disabled={savingNotes}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : subscription.notes ? (
+                      <div className="mt-3 p-2 bg-muted/50 rounded-md">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground mb-1">Notes:</p>
+                            <p className="text-sm text-foreground">{subscription.notes}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditNotes(subscription)}
+                            className="h-7 w-7 p-0"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEditNotes(subscription)}
+                          className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <Edit2 className="h-3 w-3 mr-1" />
+                          Add note
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {subscription.status === 'cancelled' ? (
                       <Button
                         size="sm"
-                        variant="ghost"
-                        className="text-slate-400 hover:text-white hover:bg-white/[0.05]"
-                        onClick={() => updateStatus(series.id, 'paused')}
+                        variant="outline"
+                        onClick={() =>
+                          updateSubscriptionStatus(subscription.merchant_key, 'active')
+                        }
+                        disabled={updatingStatus === subscription.merchant_key}
                       >
-                        Pause
+                        {updatingStatus === subscription.merchant_key ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Mark Active
+                          </>
+                        )}
                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {recurringSeries.length === 0 && categorizedSubscriptions.length === 0 && (
-        <Card className="relative overflow-hidden border-0 bg-white/[0.03] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent" />
-          <CardContent className="p-12 relative">
-            <div className="text-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="p-3 bg-white/[0.05] rounded-2xl">
-                  <RefreshCw className="h-8 w-8 text-slate-500" />
-                </div>
-                <div>
-                  <p className="text-slate-400 font-medium text-lg">No recurring charges detected yet</p>
-                  <p className="text-slate-600 text-sm mt-2">Click "Detect Patterns" to analyze your transactions</p>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCancelClick(subscription)}
+                        disabled={updatingStatus === subscription.merchant_key}
+                      >
+                        {updatingStatus === subscription.merchant_key ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Mark Cancelled
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark subscription as cancelled?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark "{selectedSubscription?.merchant_name}" as cancelled. The
+              subscription won't be counted in your monthly totals. You can always mark it as
+              active again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedSubscription) {
+                  updateSubscriptionStatus(selectedSubscription.merchant_key, 'cancelled');
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Mark as Cancelled
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

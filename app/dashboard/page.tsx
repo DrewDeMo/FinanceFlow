@@ -98,11 +98,19 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
-      const { count: recurringCount } = await supabase
-        .from('recurring_series')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'active');
+      // Fetch active subscriptions count from new subscription tracking system
+      let recurringCount = 0;
+      try {
+        const subsResponse = await fetch('/api/subscriptions');
+        if (subsResponse.ok) {
+          const subsData = await subsResponse.json();
+          recurringCount = subsData.subscriptions?.filter(
+            (s: any) => s.status === 'active'
+          ).length || 0;
+        }
+      } catch (error) {
+        console.error('Error fetching subscriptions count:', error);
+      }
 
       const { count: billsCount } = await supabase
         .from('bills')

@@ -5,209 +5,158 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Trash2, AlertTriangle } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+import { RefreshCw, CheckCircle2, AlertCircle, Database } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
-  const { toast } = useToast();
-  const router = useRouter();
-  const [deleteConfirmation, setDeleteConfirmation] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    total?: number;
+    updated?: number;
+    unchanged?: number;
+    message?: string;
+  } | null>(null);
 
-  const handleDeleteAllData = async () => {
-    if (deleteConfirmation !== 'DELETE') {
-      toast({
-        title: 'Invalid Confirmation',
-        description: 'Please type DELETE to confirm',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const handleRegenerateMerchantKeys = async () => {
     if (!user) return;
 
-    setIsDeleting(true);
-    try {
-      const tables = [
-        'categorization_rules',
-        'goals',
-        'bills',
-        'recurring_series',
-        'transactions',
-      ];
+    setIsRegenerating(true);
+    setResult(null);
 
-      for (const table of tables) {
-        await supabase
-          .from(table)
-          .delete()
-          .eq('user_id', user.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Not authenticated');
+        return;
       }
 
-      toast({
-        title: 'Success',
-        description: 'All your data has been permanently deleted',
+      const response = await fetch('/api/transactions/regenerate-merchant-keys', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      setDialogOpen(false);
-      setDeleteConfirmation('');
+      const data = await response.json();
 
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 1000);
+      if (response.ok) {
+        setResult(data);
+        toast.success(data.message || 'Merchant keys regenerated successfully!');
+      } else {
+        throw new Error(data.error || 'Failed to regenerate merchant keys');
+      }
     } catch (error) {
-      console.error('Error deleting data:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete all data',
-        variant: 'destructive',
+      console.error('Error regenerating merchant keys:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to regenerate merchant keys');
+      setResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'An error occurred'
       });
     } finally {
-      setIsDeleting(false);
+      setIsRegenerating(false);
     }
-  };
-
-  const handleDeleteAccount = async () => {
-    toast({
-      title: 'Contact Support',
-      description: 'Please contact support to delete your account',
-    });
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-slate-600 mt-1">Manage your account and data preferences</p>
+    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+          Settings
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Manage your account and application settings
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Account Information</CardTitle>
-          <CardDescription>Your account details</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Email Address</Label>
-            <Input value={user?.email || ''} disabled className="mt-1.5" />
-          </div>
-          <div>
-            <Label>User ID</Label>
-            <Input value={user?.id || ''} disabled className="mt-1.5 font-mono text-sm" />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-red-200 bg-red-50/50">
-        <CardHeader>
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
-            <div>
-              <CardTitle className="text-red-900">Danger Zone</CardTitle>
-              <CardDescription className="text-red-700">
-                Irreversible and destructive actions
-              </CardDescription>
+      <div className="space-y-6">
+        {/* Merchant Key Regeneration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Merchant Normalization
+            </CardTitle>
+            <CardDescription>
+              Update how merchant names are grouped for better transaction matching
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                If you're seeing Amazon, Starbucks, or other merchants with slightly different names
+                not grouping together, this tool will fix it by regenerating the merchant keys for all
+                your existing transactions using the improved normalization logic.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <strong>Examples of what gets fixed:</strong>
+              </p>
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                <li>AMAZON.COM*TM0QZ6HK3, AMAZON MKTPL*, AMAZON MARK* → all become "AMAZON"</li>
+                <li>STARBUCKS #1234, STARBUCKS STORE 5678 → all become "STARBUCKS"</li>
+                <li>Removes transaction codes, reference numbers, and location suffixes</li>
+              </ul>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="p-4 bg-white rounded-lg border border-red-200">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="font-semibold text-slate-900">Delete All Data</h3>
-                <p className="text-sm text-slate-600">
-                  Permanently delete all transactions, bills, recurring charges, goals, and rules.
-                  Your account will remain active.
-                </p>
-              </div>
-              <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="destructive"
-                    className="shrink-0"
-                    onClick={() => setDeleteConfirmation('')}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete All Data
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-red-600" />
-                      Delete All Data?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="space-y-4">
-                      <Alert variant="destructive" className="mt-4">
-                        <AlertDescription>
-                          <strong>This action cannot be undone.</strong> All of your financial data will be permanently deleted:
-                        </AlertDescription>
-                      </Alert>
 
-                      <ul className="list-disc list-inside space-y-1 text-sm text-slate-700">
-                        <li>All transactions</li>
-                        <li>All bills and recurring charges</li>
-                        <li>All financial goals</li>
-                        <li>All categorization rules</li>
-                      </ul>
+            {result && (
+              <Alert className={result.success ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30' : 'border-red-200 bg-red-50 dark:bg-red-950/30'}>
+                {result.success ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                )}
+                <AlertDescription>
+                  <p className="font-medium mb-1">{result.message}</p>
+                  {result.total !== undefined && (
+                    <div className="text-sm space-y-1 mt-2">
+                      <p>Total transactions: {result.total}</p>
+                      <p className="text-emerald-600 dark:text-emerald-400">Updated: {result.updated}</p>
+                      <p className="text-muted-foreground">Already correct: {result.unchanged}</p>
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
 
-                      <div className="space-y-2 pt-2">
-                        <Label htmlFor="delete-confirm" className="text-slate-900 font-semibold">
-                          Type <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">DELETE</span> to confirm:
-                        </Label>
-                        <Input
-                          id="delete-confirm"
-                          value={deleteConfirmation}
-                          onChange={(e) => setDeleteConfirmation(e.target.value)}
-                          placeholder="Type DELETE here"
-                          className="font-mono"
-                          autoComplete="off"
-                        />
-                      </div>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>
-                      Cancel
-                    </AlertDialogCancel>
-                    <Button
-                      variant="destructive"
-                      onClick={handleDeleteAllData}
-                      disabled={deleteConfirmation !== 'DELETE' || isDeleting}
-                    >
-                      {isDeleting ? 'Deleting...' : 'Delete All Data'}
-                    </Button>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </div>
-
-          <div className="p-4 bg-white rounded-lg border border-red-200">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="font-semibold text-slate-900">Delete Account</h3>
-                <p className="text-sm text-slate-600">
-                  Permanently delete your account and all associated data. This cannot be undone.
-                </p>
-              </div>
+            <div className="flex items-center gap-3 pt-2">
               <Button
-                variant="outline"
-                className="shrink-0 border-red-300 text-red-700 hover:bg-red-50"
-                onClick={handleDeleteAccount}
+                onClick={handleRegenerateMerchantKeys}
+                disabled={isRegenerating}
+                className="gap-2"
               >
-                Delete Account
+                {isRegenerating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Regenerate Merchant Keys
+                  </>
+                )}
               </Button>
+              {result && result.success && (
+                <p className="text-sm text-muted-foreground">
+                  ✓ Completed successfully
+                </p>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+              <p className="text-sm text-amber-900 dark:text-amber-200">
+                <strong>Note:</strong> This is safe to run multiple times. New imports automatically use
+                the improved normalization, so you only need to run this once to fix existing transactions.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Future settings sections can go here */}
+      </div>
     </div>
   );
 }

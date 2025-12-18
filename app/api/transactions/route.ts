@@ -67,7 +67,12 @@ export async function PATCH(request: NextRequest) {
 
         const userId = user.id;
         const body = await request.json();
-        const { transactionIds, newCategoryId } = body;
+        const {
+            transactionIds,
+            newCategoryId,
+            createRule = false,
+            merchantPattern
+        } = body;
 
         // Validate required fields
         if (!transactionIds || !Array.isArray(transactionIds) || transactionIds.length === 0) {
@@ -114,9 +119,86 @@ export async function PATCH(request: NextRequest) {
             throw updateError;
         }
 
+        let ruleCreated = false;
+        let additionalTransactionsUpdated = 0;
+
+        // Optionally create a categorization rule
+        if (createRule && merchantPattern) {
+            const normalizedPattern = merchantPattern.toLowerCase().trim();
+
+            // Check if rule already exists
+            const { data: existingRule } = await supabase
+                .from('categorization_rules')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('merchant_pattern', normalizedPattern)
+                .maybeSingle();
+
+            if (!existingRule) {
+                // Create the rule
+                const { data: newRule, error: ruleError } = await supabase
+                    .from('categorization_rules')
+                    .insert({
+                        user_id: userId,
+                        merchant_pattern: normalizedPattern,
+                        category_id: newCategoryId,
+                        priority: 100,
+                        is_active: true,
+                        match_count: transactionIds.length
+                    })
+                    .select('id')
+                    .single();
+
+                if (!ruleError && newRule) {
+                    ruleCreated = true;
+
+                    // Find other matching transactions (excluding ones we just updated)
+                    const { data: otherTransactions } = await supabase
+                        .from('transactions')
+                        .select('id, merchant_key')
+                        .eq('user_id', userId)
+                        .not('id', 'in', `(${transactionIds.join(',')})`)
+                        .neq('classification_source', 'manual');
+
+                    if (otherTransactions) {
+                        const matchingIds = otherTransactions
+                            .filter(t => (t.merchant_key || '').toLowerCase().includes(normalizedPattern))
+                            .map(t => t.id);
+
+                        if (matchingIds.length > 0) {
+                            const { error: bulkUpdateError } = await supabase
+                                .from('transactions')
+                                .update({
+                                    category_id: newCategoryId,
+                                    classification_source: 'rule',
+                                    classification_confidence: 0.9,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('user_id', userId)
+                                .in('id', matchingIds);
+
+                            if (!bulkUpdateError) {
+                                additionalTransactionsUpdated = matchingIds.length;
+
+                                // Update rule match count
+                                await supabase
+                                    .from('categorization_rules')
+                                    .update({
+                                        match_count: transactionIds.length + additionalTransactionsUpdated
+                                    })
+                                    .eq('id', newRule.id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            updated: transactionIds.length
+            updated: transactionIds.length,
+            ruleCreated,
+            additionalTransactionsUpdated
         });
     } catch (error) {
         console.error('Error updating transactions:', error);

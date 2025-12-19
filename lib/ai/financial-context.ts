@@ -13,6 +13,7 @@ export interface TransactionDetail {
     merchantKey: string;
     amount: number;
     category: string;
+    categoryId: string;
     categoryType: string;
 }
 
@@ -31,6 +32,7 @@ export interface FinancialSummary {
 }
 
 export interface CategorySummary {
+    id: string;
     name: string;
     type: string;
     amount: number;
@@ -127,6 +129,7 @@ export async function buildFinancialContext(
     transactions?.forEach((t: any) => {
         const amount = Number(t.amount);
         const category = Array.isArray(t.categories) ? t.categories[0] : t.categories;
+        const categoryId = t.category_id || 'uncategorized';
         const categoryName = category?.name || 'Uncategorized';
         const categoryType = category?.type || 'expense';
         const isTransfer = categoryType === 'transfer';
@@ -138,6 +141,7 @@ export async function buildFinancialContext(
             merchantKey: t.merchant_key || '',
             amount: amount,
             category: categoryName,
+            categoryId: categoryId,
             categoryType: categoryType,
         });
 
@@ -149,14 +153,15 @@ export async function buildFinancialContext(
             }
         }
 
-        // Category breakdown (expenses only)
+        // Category breakdown (expenses only) - use category_id for accurate grouping
         if (!isTransfer && amount < 0) {
-            const existing = categoryMap.get(categoryName);
+            const existing = categoryMap.get(categoryId);
             if (existing) {
                 existing.amount += Math.abs(amount);
                 existing.transactionCount += 1;
             } else {
-                categoryMap.set(categoryName, {
+                categoryMap.set(categoryId, {
+                    id: categoryId,
                     name: categoryName,
                     type: categoryType,
                     amount: Math.abs(amount),
@@ -292,8 +297,9 @@ export function formatFinancialContextForAI(summary: FinancialSummary): string {
 
     if (summary.categoryBreakdown.length > 0) {
         context += `**Spending by Category (Top 10):**\n`;
+        context += `IMPORTANT: These are pre-calculated totals. Use these exact figures when answering questions about category spending.\n`;
         summary.categoryBreakdown.forEach(cat => {
-            context += `- ${cat.name}: ${formatCurrency(cat.amount)} (${cat.percentOfTotal}% of spending, ${cat.transactionCount} transactions)\n`;
+            context += `- ${cat.name}: TOTAL=${formatCurrency(cat.amount)}, ${cat.transactionCount} transactions, ${cat.percentOfTotal}% of spending\n`;
         });
         context += '\n';
     }

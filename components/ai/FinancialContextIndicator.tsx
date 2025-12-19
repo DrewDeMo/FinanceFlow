@@ -8,7 +8,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { Info, Calendar, TrendingUp, RefreshCw, CreditCard } from 'lucide-react';
+import { Info, Calendar, TrendingUp, RefreshCw, CreditCard, Receipt } from 'lucide-react';
 
 export type ContextType = 'monthly' | 'yearly' | 'custom';
 
@@ -47,11 +47,15 @@ export function FinancialContextIndicator({
                     <div>
                         <h4 className="font-medium text-sm mb-2">What the AI can see</h4>
                         <p className="text-xs text-muted-foreground mb-3">
-                            The AI has access to aggregated summaries of your financial data, not individual transaction details.
+                            The AI has full access to all your transactions for the selected time period, including descriptions, amounts, and categories.
                         </p>
                     </div>
 
                     <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs">
+                            <Receipt className="h-3 w-3 text-primary" />
+                            <span>All individual transactions with full details</span>
+                        </div>
                         <div className="flex items-center gap-2 text-xs">
                             <TrendingUp className="h-3 w-3 text-emerald-500" />
                             <span>Income and expense totals</span>

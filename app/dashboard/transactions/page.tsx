@@ -106,6 +106,10 @@ export default function TransactionsPage() {
     if (!user) return;
 
     try {
+      // Fetch categories with customizations from API
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
       const [transactionsRes, categoriesRes, accountsRes] = await Promise.all([
         supabase
           .from('transactions')
@@ -119,17 +123,17 @@ export default function TransactionsPage() {
             merchant_key,
             notes,
             classification_source,
-            categories:category_id (name, color, icon),
             accounts:account_id (name, type)
           `)
           .eq('user_id', user.id)
           .order('posted_date', { ascending: false })
           .limit(500),
-        supabase
-          .from('categories')
-          .select('*')
-          .or(`user_id.eq.${user.id},is_system.eq.true`)
-          .order('name'),
+        // Fetch categories from API to get proper customizations
+        token ? fetch('/api/categories', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }).then(res => res.json()) : null,
         supabase
           .from('accounts')
           .select('id, name, type')
@@ -138,17 +142,30 @@ export default function TransactionsPage() {
           .order('name'),
       ]);
 
-      if (transactionsRes.data) {
-        const formatted = transactionsRes.data.map((t: any) => ({
-          ...t,
-          category: Array.isArray(t.categories) ? t.categories[0] : t.categories,
-          account: Array.isArray(t.accounts) ? t.accounts[0] : t.accounts,
-        }));
-        setTransactions(formatted);
-      }
+      // Store categories with customizations
+      const customizedCategories = categoriesRes?.categories || [];
+      setCategories(customizedCategories);
 
-      if (categoriesRes.data) {
-        setCategories(categoriesRes.data);
+      // Create a map of categories for quick lookup
+      const categoryMap = new Map(
+        customizedCategories.map((cat: Category) => [cat.id, cat])
+      );
+
+      // Map transactions with customized category data
+      if (transactionsRes.data) {
+        const formatted = transactionsRes.data.map((t: any) => {
+          const category = t.category_id ? categoryMap.get(t.category_id) : null;
+          return {
+            ...t,
+            category: category ? {
+              name: category.name,
+              color: category.color,
+              icon: category.icon
+            } : null,
+            account: Array.isArray(t.accounts) ? t.accounts[0] : t.accounts,
+          };
+        });
+        setTransactions(formatted);
       }
 
       if (accountsRes.data) {

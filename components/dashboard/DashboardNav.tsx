@@ -16,6 +16,7 @@ import {
   Tags,
   Zap,
   ChevronRight,
+  Calendar,
 } from 'lucide-react';
 
 const navSections = [
@@ -26,6 +27,11 @@ const navSections = [
         name: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
+      },
+      {
+        name: 'Calendar',
+        href: '/dashboard/calendar',
+        icon: Calendar,
       },
       {
         name: 'Transactions',

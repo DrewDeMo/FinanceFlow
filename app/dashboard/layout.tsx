@@ -12,15 +12,11 @@ export default function DashboardLayout({
     <ProtectedRoute>
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Sidebar Navigation */}
-        <aside className="hidden md:flex w-64 flex-shrink-0">
-          <DashboardNav />
-        </aside>
+        <DashboardNav className="hidden md:flex w-64 flex-shrink-0" />
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="min-h-full">
-            {children}
-          </div>
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {children}
         </main>
       </div>
     </ProtectedRoute>

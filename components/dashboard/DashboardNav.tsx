@@ -83,7 +83,11 @@ const navSections = [
   },
 ];
 
-export function DashboardNav() {
+interface DashboardNavProps {
+  className?: string;
+}
+
+export function DashboardNav({ className }: DashboardNavProps) {
   const pathname = usePathname();
   const { signOut, user } = useAuth();
 
@@ -95,7 +99,7 @@ export function DashboardNav() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card border-r border-border/50">
+    <aside className={cn("flex flex-col h-full bg-card border-r border-border/50", className)}>
       {/* Logo */}
       <div className="px-6 py-5 border-b border-border/50">
         <div className="flex items-center gap-3">
@@ -215,6 +219,6 @@ export function DashboardNav() {
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }

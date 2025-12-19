@@ -17,9 +17,12 @@ import { RefreshCw, CheckCircle2, AlertCircle, Database, Bot, Sparkles } from 'l
 import { toast } from 'sonner';
 
 const AI_MODELS = [
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cost-effective' },
-  { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable, best for complex analysis' },
-  { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Balance of speed and capability' },
+  { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Latest and most capable model' },
+  { id: 'gpt-5', name: 'GPT-5', description: 'Advanced reasoning and analysis' },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Balanced performance and speed' },
+  { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Fastest, most cost-effective' },
+  { id: 'gpt-4o', name: 'GPT-4o', description: 'Previous generation, reliable' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Legacy fast model' },
 ];
 
 export default function SettingsPage() {
@@ -34,7 +37,7 @@ export default function SettingsPage() {
   } | null>(null);
 
   // AI Model Settings
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [selectedModel, setSelectedModel] = useState('gpt-5-mini');
   const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
   const [isSavingModel, setIsSavingModel] = useState(false);
 

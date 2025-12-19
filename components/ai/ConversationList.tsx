@@ -20,7 +20,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MessageSquare, MoreVertical, Trash2, Plus } from 'lucide-react';
+import { MessageSquare, MoreVertical, Trash2, Plus, Trash } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export interface Conversation {
@@ -37,6 +37,7 @@ interface ConversationListProps {
     onSelect: (id: string) => void;
     onNew: () => void;
     onDelete: (id: string) => void;
+    onClearAll: () => void;
     isLoading?: boolean;
 }
 
@@ -46,22 +47,40 @@ export function ConversationList({
     onSelect,
     onNew,
     onDelete,
+    onClearAll,
     isLoading = false,
 }: ConversationListProps) {
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
 
     const handleDelete = (id: string) => {
         onDelete(id);
         setDeleteConfirmId(null);
     };
 
+    const handleClearAll = () => {
+        onClearAll();
+        setShowClearAllConfirm(false);
+    };
+
     return (
         <div className="flex flex-col h-full">
-            <div className="p-3 border-b">
+            <div className="p-3 border-b space-y-2">
                 <Button onClick={onNew} className="w-full gap-2" size="sm">
                     <Plus className="h-4 w-4" />
                     New Conversation
                 </Button>
+                {conversations.length > 0 && (
+                    <Button
+                        variant="outline"
+                        onClick={() => setShowClearAllConfirm(true)}
+                        className="w-full gap-2 text-destructive hover:text-destructive"
+                        size="sm"
+                    >
+                        <Trash className="h-4 w-4" />
+                        Clear All Chats
+                    </Button>
+                )}
             </div>
 
             <ScrollArea className="flex-1">
@@ -138,6 +157,26 @@ export function ConversationList({
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Clear All Conversations</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete all {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleClearAll}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Clear All
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

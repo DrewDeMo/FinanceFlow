@@ -47,20 +47,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get user's preferred model or use requested/default
-        let model: ModelId = DEFAULT_MODEL;
-        if (requestedModel) {
-            model = requestedModel as ModelId;
-        } else {
-            const { data: preferences } = await supabase
-                .from('user_ai_preferences')
-                .select('preferred_model')
-                .eq('user_id', userId)
-                .single();
-
-            if (preferences?.preferred_model) {
-                model = preferences.preferred_model as ModelId;
-            }
-        }
+        const model: ModelId = requestedModel ? (requestedModel as ModelId) : DEFAULT_MODEL;
 
         // Get or create conversation
         let convId = conversationId;

@@ -2,14 +2,17 @@ import OpenAI from 'openai';
 
 // Available models for user selection
 export const AVAILABLE_MODELS = [
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cost-effective' },
-    { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable, best for complex analysis' },
-    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Balance of speed and capability' },
+    { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Latest and most capable model' },
+    { id: 'gpt-5', name: 'GPT-5', description: 'Advanced reasoning and analysis' },
+    { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Balanced performance and speed' },
+    { id: 'gpt-5-nano', name: 'GPT-5 Nano', description: 'Fastest, most cost-effective' },
+    { id: 'gpt-4o', name: 'GPT-4o', description: 'Previous generation, reliable' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Legacy fast model' },
 ] as const;
 
 export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
 
-export const DEFAULT_MODEL: ModelId = 'gpt-4o-mini';
+export const DEFAULT_MODEL: ModelId = 'gpt-5-mini';
 
 // Create OpenAI client instance
 export function createOpenAIClient() {
@@ -40,6 +43,11 @@ export interface ChatMessage {
     content: string;
 }
 
+// Check if model is GPT-5 series (uses max_completion_tokens instead of max_tokens)
+function isGpt5Model(model: string): boolean {
+    return model.startsWith('gpt-5');
+}
+
 // Stream chat completion
 export async function* streamChatCompletion(
     messages: ChatMessage[],
@@ -47,13 +55,22 @@ export async function* streamChatCompletion(
 ): AsyncGenerator<string, void, unknown> {
     const openai = getOpenAIClient();
 
-    const stream = await openai.chat.completions.create({
+    const params: any = {
         model,
         messages,
         stream: true,
-        temperature: 0.7,
-        max_tokens: 2000,
-    });
+    };
+
+    // GPT-5 models use different parameters
+    if (isGpt5Model(model)) {
+        params.max_completion_tokens = 2000;
+        // GPT-5 models only support temperature=1 (default), so we omit it
+    } else {
+        params.max_tokens = 2000;
+        params.temperature = 0.7;
+    }
+
+    const stream = await openai.chat.completions.create(params);
 
     for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content;
@@ -70,12 +87,21 @@ export async function chatCompletion(
 ): Promise<string> {
     const openai = getOpenAIClient();
 
-    const response = await openai.chat.completions.create({
+    const params: any = {
         model,
         messages,
-        temperature: 0.7,
-        max_tokens: 2000,
-    });
+    };
+
+    // GPT-5 models use different parameters
+    if (isGpt5Model(model)) {
+        params.max_completion_tokens = 2000;
+        // GPT-5 models only support temperature=1 (default), so we omit it
+    } else {
+        params.max_tokens = 2000;
+        params.temperature = 0.7;
+    }
+
+    const response = await openai.chat.completions.create(params);
 
     return response.choices[0]?.message?.content || '';
 }

@@ -104,5 +104,59 @@ export async function POST(request: NextRequest) {
     }
 }
 
+// DELETE - Delete all conversations for the user
+export async function DELETE(request: NextRequest) {
+    try {
+        const authHeader = request.headers.get('authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userId = user.id;
+
+        // First delete all messages from user's conversations
+        const { data: conversations } = await supabase
+            .from('ai_conversations')
+            .select('id')
+            .eq('user_id', userId);
+
+        if (conversations && conversations.length > 0) {
+            const conversationIds = conversations.map(c => c.id);
+
+            // Delete all messages
+            await supabase
+                .from('ai_messages')
+                .delete()
+                .in('conversation_id', conversationIds);
+        }
+
+        // Delete all conversations
+        const { error } = await supabase
+            .from('ai_conversations')
+            .delete()
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error('Error deleting all conversations:', error);
+            return NextResponse.json({ error: 'Failed to delete conversations' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true, deleted: conversations?.length || 0 });
+    } catch (error) {
+        console.error('Conversations API error:', error);
+        return NextResponse.json(
+            { error: 'Failed to delete conversations' },
+            { status: 500 }
+        );
+    }
+}
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

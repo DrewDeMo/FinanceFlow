@@ -139,6 +139,29 @@ export default function AIAssistantPage() {
         }
     };
 
+    const handleClearAllConversations = async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch('/api/ai/conversations', {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setConversations([]);
+                setSelectedConversationId(null);
+                setMessages([]);
+                toast.success(`Cleared ${data.deleted} conversation${data.deleted !== 1 ? 's' : ''}`);
+            }
+        } catch (error) {
+            console.error('Error clearing conversations:', error);
+            toast.error('Failed to clear conversations');
+        }
+    };
+
     const handleSendMessage = async (message: string) => {
         if (!user || isStreaming) return;
 
@@ -251,30 +274,31 @@ export default function AIAssistantPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-64px)]">
+        <div className="flex flex-1 min-h-0 bg-background">
             {/* Sidebar */}
             <div
                 className={cn(
-                    'border-r bg-muted/30 transition-all duration-300 flex-shrink-0',
-                    sidebarOpen ? 'w-72' : 'w-0'
+                    'bg-card border-r transition-all duration-300 ease-in-out flex-shrink-0 overflow-hidden',
+                    sidebarOpen ? 'w-72' : 'w-0 border-r-0'
                 )}
             >
-                {sidebarOpen && (
+                <div className="w-72 h-full bg-card">
                     <ConversationList
                         conversations={conversations}
                         selectedId={selectedConversationId || undefined}
                         onSelect={setSelectedConversationId}
                         onNew={handleNewConversation}
                         onDelete={handleDeleteConversation}
+                        onClearAll={handleClearAllConversations}
                         isLoading={conversationsLoading}
                     />
-                )}
+                </div>
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b">
+                <div className="flex-shrink-0 flex items-center justify-between p-4 border-b">
                     <div className="flex items-center gap-2">
                         <Button
                             variant="ghost"
@@ -308,79 +332,107 @@ export default function AIAssistantPage() {
 
                 {/* API Key Warning */}
                 {apiKeyMissing && (
-                    <Alert variant="destructive" className="m-4">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                            OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.
-                        </AlertDescription>
-                    </Alert>
+                    <div className="flex-shrink-0">
+                        <Alert variant="destructive" className="m-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>
+                                OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.
+                            </AlertDescription>
+                        </Alert>
+                    </div>
                 )}
 
                 {/* Messages */}
-                <ScrollArea className="flex-1 p-4">
+                <div className="flex-1 min-h-0 overflow-hidden relative">
                     {messagesLoading ? (
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="flex gap-3">
-                                    <Skeleton className="w-8 h-8 rounded-full" />
-                                    <div className="flex-1 space-y-2">
-                                        <Skeleton className="h-4 w-24" />
-                                        <Skeleton className="h-16 w-full" />
+                        <div className="absolute inset-0 p-4 overflow-auto">
+                            <div className="space-y-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="flex gap-3">
+                                        <Skeleton className="w-8 h-8 rounded-full" />
+                                        <div className="flex-1 space-y-2">
+                                            <Skeleton className="h-4 w-24" />
+                                            <Skeleton className="h-16 w-full" />
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : messages.length === 0 && !isStreaming ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                            <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center mb-4">
-                                <Bot className="h-8 w-8 text-violet-600 dark:text-violet-400" />
-                            </div>
-                            <h2 className="text-lg font-semibold mb-2">How can I help you today?</h2>
-                            <p className="text-muted-foreground text-sm max-w-md mb-6">
-                                I can analyze your spending patterns, identify savings opportunities, and answer questions about your finances.
-                            </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
-                                {[
-                                    'How much did I spend on dining this month?',
-                                    'What are my top expense categories?',
-                                    'Do I have any subscriptions I should review?',
-                                    'How does my spending compare to last month?',
-                                ].map((suggestion, i) => (
-                                    <Button
-                                        key={i}
-                                        variant="outline"
-                                        className="text-left h-auto py-3 px-4 justify-start text-sm"
-                                        onClick={() => handleSendMessage(suggestion)}
-                                        disabled={isStreaming}
-                                    >
-                                        {suggestion}
-                                    </Button>
                                 ))}
                             </div>
                         </div>
-                    ) : (
-                        <div className="space-y-4 max-w-3xl mx-auto">
-                            {messages.map((msg) => (
-                                <ChatMessage
-                                    key={msg.id}
-                                    role={msg.role}
-                                    content={msg.content}
-                                />
-                            ))}
-                            {isStreaming && streamingContent && (
-                                <ChatMessage
-                                    role="assistant"
-                                    content={streamingContent}
-                                    isStreaming
-                                />
-                            )}
-                            <div ref={messagesEndRef} />
+                    ) : messages.length === 0 && !isStreaming ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 overflow-auto">
+                            <div className="py-8">
+                                <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center mb-4 mx-auto">
+                                    <Bot className="h-8 w-8 text-violet-600 dark:text-violet-400" />
+                                </div>
+                                <h2 className="text-lg font-semibold mb-2">How can I help you today?</h2>
+                                <p className="text-muted-foreground text-sm max-w-md mb-6 mx-auto">
+                                    I can analyze your spending patterns, identify savings opportunities, and answer questions about your finances.
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg mx-auto">
+                                    {[
+                                        'How much did I spend on dining this month?',
+                                        'What are my top expense categories?',
+                                        'Do I have any subscriptions I should review?',
+                                        'How does my spending compare to last month?',
+                                    ].map((suggestion, i) => (
+                                        <Button
+                                            key={i}
+                                            variant="outline"
+                                            className="text-left h-auto py-3 px-4 justify-start text-sm whitespace-normal"
+                                            onClick={() => handleSendMessage(suggestion)}
+                                            disabled={isStreaming}
+                                        >
+                                            {suggestion}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
+                    ) : (
+                        <ScrollArea className="h-full">
+                            <div className="p-4 space-y-4 max-w-3xl mx-auto pb-2">
+                                {messages.map((msg) => (
+                                    <ChatMessage
+                                        key={msg.id}
+                                        role={msg.role}
+                                        content={msg.content}
+                                    />
+                                ))}
+                                {isStreaming && !streamingContent && (
+                                    <div className="flex gap-3 p-4 rounded-xl bg-card border shadow-sm mr-8">
+                                        <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400">
+                                            <Bot className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm mb-2 text-foreground">
+                                                Financial Assistant
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <span>Analyzing your financial data</span>
+                                                <span className="flex gap-1">
+                                                    <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                    <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                    <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {isStreaming && streamingContent && (
+                                    <ChatMessage
+                                        role="assistant"
+                                        content={streamingContent}
+                                        isStreaming
+                                    />
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+                        </ScrollArea>
                     )}
-                </ScrollArea>
+                </div>
 
                 {/* Input */}
-                <div className="p-4 border-t bg-background">
+                <div className="flex-shrink-0 p-4 border-t bg-background">
                     <div className="max-w-3xl mx-auto">
                         <ChatInput
                             onSend={handleSendMessage}

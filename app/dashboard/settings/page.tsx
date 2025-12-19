@@ -1,13 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RefreshCw, CheckCircle2, AlertCircle, Database } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { RefreshCw, CheckCircle2, AlertCircle, Database, Bot, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+
+const AI_MODELS = [
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cost-effective' },
+  { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable, best for complex analysis' },
+  { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Balance of speed and capability' },
+];
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -19,6 +32,72 @@ export default function SettingsPage() {
     unchanged?: number;
     message?: string;
   } | null>(null);
+
+  // AI Model Settings
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
+  const [isSavingModel, setIsSavingModel] = useState(false);
+
+  // Load user's AI preferences
+  useEffect(() => {
+    const loadPreferences = async () => {
+      if (!user) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data } = await supabase
+          .from('user_ai_preferences')
+          .select('preferred_model')
+          .eq('user_id', user.id)
+          .single();
+
+        if (data?.preferred_model) {
+          setSelectedModel(data.preferred_model);
+        }
+      } catch (error) {
+        console.error('Error loading AI preferences:', error);
+      } finally {
+        setIsLoadingPreferences(false);
+      }
+    };
+
+    loadPreferences();
+  }, [user]);
+
+  const handleModelChange = async (modelId: string) => {
+    if (!user) return;
+    setIsSavingModel(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Not authenticated');
+        return;
+      }
+
+      // Upsert the preference
+      const { error } = await supabase
+        .from('user_ai_preferences')
+        .upsert({
+          user_id: user.id,
+          preferred_model: modelId,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id',
+        });
+
+      if (error) throw error;
+
+      setSelectedModel(modelId);
+      toast.success('AI model preference saved');
+    } catch (error) {
+      console.error('Error saving model preference:', error);
+      toast.error('Failed to save model preference');
+    } finally {
+      setIsSavingModel(false);
+    }
+  };
 
   const handleRegenerateMerchantKeys = async () => {
     if (!user) return;
@@ -155,7 +234,69 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Future settings sections can go here */}
+        {/* AI Assistant Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-violet-500" />
+              AI Financial Assistant
+            </CardTitle>
+            <CardDescription>
+              Configure your AI assistant preferences
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Preferred Model</label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Choose which AI model to use for financial analysis. More capable models provide
+                better analysis but may be slower.
+              </p>
+              <Select
+                value={selectedModel}
+                onValueChange={handleModelChange}
+                disabled={isLoadingPreferences || isSavingModel}
+              >
+                <SelectTrigger className="w-full max-w-xs">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.name}</span>
+                        <span className="text-xs text-muted-foreground">{model.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isSavingModel && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  Saving...
+                </p>
+              )}
+            </div>
+
+            <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50">
+              <div className="flex items-start gap-2">
+                <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-violet-900 dark:text-violet-200">
+                    What the AI can help with
+                  </p>
+                  <ul className="text-sm text-violet-700 dark:text-violet-300 mt-1 space-y-1">
+                    <li>• Analyze your spending patterns and trends</li>
+                    <li>• Identify opportunities to save money</li>
+                    <li>• Review subscriptions and recurring charges</li>
+                    <li>• Answer questions about your finances</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

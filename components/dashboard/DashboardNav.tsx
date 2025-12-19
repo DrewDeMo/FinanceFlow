@@ -17,6 +17,7 @@ import {
   Zap,
   ChevronRight,
   Calendar,
+  Bot,
 } from 'lucide-react';
 
 const navSections = [
@@ -27,6 +28,11 @@ const navSections = [
         name: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
+      },
+      {
+        name: 'AI Assistant',
+        href: '/dashboard/ai',
+        icon: Bot,
       },
       {
         name: 'Calendar',

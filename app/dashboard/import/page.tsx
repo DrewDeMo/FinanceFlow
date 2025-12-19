@@ -82,6 +82,8 @@ export default function ImportPage() {
     imported: 0,
     duplicates: 0,
     errors: 0,
+    autoCategorized: 0,
+    uncategorized: 0,
   });
   const [showSkippedDuplicates, setShowSkippedDuplicates] = useState(false);
 
@@ -268,6 +270,8 @@ export default function ImportPage() {
         imported: result.imported,
         duplicates: result.duplicates,
         errors: result.errors,
+        autoCategorized: result.autoCategorized || 0,
+        uncategorized: result.uncategorized || 0,
       });
 
       await (supabase
@@ -319,7 +323,7 @@ export default function ImportPage() {
     setDragActive(false);
     setImportProgress(0);
     setAnalysisResult(null);
-    setImportStats({ imported: 0, duplicates: 0, errors: 0 });
+    setImportStats({ imported: 0, duplicates: 0, errors: 0, autoCategorized: 0, uncategorized: 0 });
     setShowSkippedDuplicates(false);
   };
 
@@ -544,12 +548,24 @@ export default function ImportPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Stats Grid */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
                   <div className="text-3xl font-bold text-green-600 dark:text-green-400">
                     {importStats.imported}
                   </div>
                   <div className="text-sm text-green-700 dark:text-green-300 font-medium">Imported</div>
+                </div>
+                <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border-2 border-purple-200 dark:border-purple-700">
+                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                    {importStats.autoCategorized}
+                  </div>
+                  <div className="text-sm text-purple-700 dark:text-purple-300 font-medium">Auto-Categorized</div>
+                </div>
+                <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border-2 border-orange-200 dark:border-orange-700">
+                  <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+                    {importStats.uncategorized}
+                  </div>
+                  <div className="text-sm text-orange-700 dark:text-orange-300 font-medium">Need Review</div>
                 </div>
                 <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
                   <div className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
@@ -557,13 +573,30 @@ export default function ImportPage() {
                   </div>
                   <div className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">Duplicates Skipped</div>
                 </div>
-                <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
-                  <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-                    {importStats.errors}
-                  </div>
-                  <div className="text-sm text-red-700 dark:text-red-300 font-medium">Errors</div>
-                </div>
               </div>
+
+              {/* Smart Categorization Info */}
+              {importStats.autoCategorized > 0 && (
+                <Alert className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 border-purple-200 dark:border-purple-800">
+                  <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <AlertTitle className="text-purple-800 dark:text-purple-300">Smart Categorization Active</AlertTitle>
+                  <AlertDescription className="text-purple-700 dark:text-purple-400">
+                    {importStats.autoCategorized} transaction{importStats.autoCategorized !== 1 ? 's were' : ' was'} automatically categorized based on your previous categorization choices.
+                    {importStats.uncategorized > 0 && ` Review the ${importStats.uncategorized} uncategorized transaction${importStats.uncategorized !== 1 ? 's' : ''} to teach the system.`}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {importStats.uncategorized > 0 && importStats.autoCategorized === 0 && (
+                <Alert className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800">
+                  <Info className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <AlertTitle className="text-orange-800 dark:text-orange-300">New Merchants Detected</AlertTitle>
+                  <AlertDescription className="text-orange-700 dark:text-orange-400">
+                    {importStats.uncategorized} transaction{importStats.uncategorized !== 1 ? 's are' : ' is'} from merchants you haven't categorized before.
+                    Categorize them once and future imports will automatically learn your preferences.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Date Range Info */}
               {analysisResult?.dateRange && (

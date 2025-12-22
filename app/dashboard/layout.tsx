@@ -15,7 +15,7 @@ export default function DashboardLayout({
         <DashboardNav className="hidden md:flex w-64 flex-shrink-0" />
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <main className="flex-1 flex flex-col overflow-auto min-w-0">
           {children}
         </main>
       </div>
